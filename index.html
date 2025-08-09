@@ -2,57 +2,46 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>2048 Classic</title>
+<title>Rogue-2048</title>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="container">
     <header>
-      <div class="title-block">
-        <h1>2048</h1>
-        <div class="subtitle">Join the numbers and get to the 2048 tile!</div>
-      </div>
-      <div class="scores">
-        <div class="score-box" id="scoreBox">
-          <div class="label">SCORE</div>
-          <div class="value" id="score">0</div>
-        </div>
-        <div class="score-box">
-          <div class="label">BEST</div>
-            <div class="value" id="best">0</div>
-        </div>
+      <h1>Rogue-2048</h1>
+      <div class="stats">
+        <div class="card" aria-live="polite">Score: <span id="score">0</span></div>
+        <div class="card">Best: <span id="best">0</span></div>
       </div>
     </header>
-
-    <div class="above-bar">
-      <button id="btnNewGame" class="btn-primary">New Game</button>
-    </div>
-
-    <div class="game-wrapper">
-      <div class="grid-container">
-        <div class="grid-background">
-          <!-- 16 background cells -->
-          <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
-          <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
-          <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
-          <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
-        </div>
-        <div id="tileLayer" class="tile-container"></div>
+    <main class="board" role="grid" aria-label="2048 game board">
+      <div id="grid" class="grid">
+        <div class="grid-bg" id="gridBg"></div>
+        <div class="tile-layer" id="tileLayer"></div>
       </div>
+    </main>
+    <div class="controls">
+      <button id="btnRestart">Restart</button>
     </div>
+    <div id="statusBar"></div>
+  </div>
 
-    <div id="message" class="message hidden">
-      <div class="overlay-content">
-        <div id="messageText"></div>
-        <div class="buttons">
-          <button id="btnKeepGoing" class="btn-secondary hidden">Keep Going</button>
-          <button id="btnTryAgain" class="btn-primary">Try Again</button>
-        </div>
-      </div>
+  <div id="endgameOverlay" class="overlay" aria-modal="true" role="dialog">
+    <div class="panel">
+      <h2 id="overlayTitle"></h2>
+      <p id="overlayText"></p>
+      <button id="btnRestart2">Restart</button>
     </div>
+  </div>
 
-    <div id="statusBar" class="status-bar"></div>
+  <div id="eventOverlay" class="overlay" aria-modal="true" role="dialog">
+    <div class="panel">
+      <h2 id="overlayTitleEvent">Event!</h2>
+      <p id="overlayTextEvent"></p>
+      <div id="eventOptions" class="event-options"></div>
+      <button id="btnCloseEvent">Close</button>
+    </div>
   </div>
 
   <script src="game.js"></script>
