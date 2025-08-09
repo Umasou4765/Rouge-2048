@@ -1,17 +1,15 @@
-/* Rogue-2048 (Endless + Rebalanced Chance/Fate System) */
+/* Rogue-2048 (Endless + Rebalanced Chance/Fate + Enhanced Animations) */
 
 const SIZE = 4;
 const BEST_KEY = 'rogue2048_best_roguelike';
 
 // Config
 const EVENT_PROBABILITY = 1.0;
-const EVENT_TRIGGER_MODE = 'eachMax'; // 'eachMax','powerOfTwo','multipleOf8','everyIncrement'
+const EVENT_TRIGGER_MODE = 'eachMax';
 const EVENT_COOLDOWN = 2;
-const ENABLE_WIN_CHECK = false; // Endless
+const ENABLE_WIN_CHECK = false;
 const MAX_STATIC_CLASS = 2048;
 const EVENT_FOR_POWERS_ONLY = false;
-
-// Chance ratios
 const CHANCE_GOOD_RATIO = 0.8;
 
 // State
@@ -27,6 +25,8 @@ let lastEventMove = -999;
 let triggeredSet = new Set();
 let triggeredHistory = [];
 let lastMaxValue = 0;
+let lastSpawn = null;
+let prevGrid = null;
 
 // DOM
 const gridEl = document.getElementById('grid');
@@ -84,45 +84,65 @@ function init(){
   triggeredHistory = [];
   lastMaxValue = 0;
   lastEventMove = -999;
-
+  lastSpawn = null;
+  prevGrid = null;
   spawnRandom(); spawnRandom();
   hideOverlays();
   render();
   enableInput();
-  updateStatus('');
+  updateStatus('Game started.');
 }
 function spawnRandom(){
   const empties = [];
   for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (grid[r][c]===0) empties.push([r,c]);
   if (!empties.length) return false;
-  const [r,c] = empties[(Math.random() * empties.length) | 0];
+  const [r,c] = empties[(Math.random()*empties.length)|0];
   grid[r][c] = Math.random() < 0.9 ? 2 : 4;
+  lastSpawn = {r,c};
   return true;
 }
 
-// ---------- Move / Merge ----------
+// ---------- Move / Merge with Mapping ----------
 function moveLeftProcess(g){
   let moved = false, gained = 0;
   const mergedPos = [];
+  const moveMap = []; // {from:[{r,c,value}], to:{r,c,value}, merged:boolean, valueChanged:boolean}
   const ng = g.map((row,rIdx) => {
-    const filtered = row.filter(v => v!==0);
+    const tiles = [];
+    for (let c=0;c<SIZE;c++) if (row[c] !== 0) tiles.push({val: row[c], from: c});
     const newRow = [];
-    for (let i=0;i<filtered.length;i++){
-      if (i+1 < filtered.length && filtered[i] === filtered[i+1]) {
-        const merged = filtered[i]*2;
-        newRow.push(merged);
-        gained += merged;
-        mergedPos.push({row: rIdx, col: newRow.length-1});
+    let writeCol = 0;
+    for (let i=0;i<tiles.length;i++){
+      if (i+1 < tiles.length && tiles[i].val === tiles[i+1].val){
+        const mergedVal = tiles[i].val * 2;
+        newRow[writeCol] = mergedVal;
+        gained += mergedVal;
+        mergedPos.push({row: rIdx, col: writeCol});
+        moveMap.push({
+          from: [{r:rIdx,c:tiles[i].from,value:tiles[i].val},{r:rIdx,c:tiles[i+1].from,value:tiles[i+1].val}],
+          to: {r:rIdx,c:writeCol,value:mergedVal},
+          merged: true,
+          valueChanged: true
+        });
+        writeCol++;
         i++;
       } else {
-        newRow.push(filtered[i]);
+        newRow[writeCol] = tiles[i].val;
+        const valChanged = tiles[i].from !== writeCol;
+        moveMap.push({
+          from: [{r:rIdx,c:tiles[i].from,value:tiles[i].val}],
+          to: {r:rIdx,c:writeCol,value:tiles[i].val},
+            merged:false,
+            valueChanged: valChanged
+        });
+        writeCol++;
       }
     }
     while (newRow.length < SIZE) newRow.push(0);
     return newRow;
   });
   for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (ng[r][c] !== g[r][c]) moved = true;
-  return { newGrid: ng, moved, gained, mergedPositions: mergedPos };
+  return { newGrid: ng, moved, gained, mergedPositions: mergedPos, moveMap };
 }
 function transpose(g){
   const out = Array.from({length: SIZE}, () => Array(SIZE).fill(0));
@@ -131,29 +151,81 @@ function transpose(g){
 }
 const reverseRows = g => g.map(r => r.slice().reverse());
 
+function adaptMappingForTransform(map, transform){
+  // transform: sequence of operations done to grid for left-processing
+  // We'll compute actual 'from' and 'to' after reversing transforms
+  // transform is array of strings: e.g. ['reverse'] or ['transpose','reverse'] etc.
+  // We apply inverse in reverse order.
+  function unreversedCol(c){ return SIZE-1-c; }
+  function applyInverse(pt, op){
+    if (op === 'reverse'){
+      return {r: pt.r, c: unreversedCol(pt.c)};
+    }
+    if (op === 'transpose'){
+      return {r: pt.c, c: pt.r};
+    }
+    return pt;
+  }
+  return map.map(entry => {
+    const newEntry = {
+      from: entry.from.map(f => ({...f})),
+      to: {...entry.to},
+      merged: entry.merged,
+      valueChanged: entry.valueChanged
+    };
+    for (let inv of transform.slice().reverse()){
+      newEntry.to = applyInverse(newEntry.to, inv);
+      newEntry.from = newEntry.from.map(f => applyInverse(f, inv));
+    }
+    return newEntry;
+  });
+}
+
 function move(dir){
   if (gameOver || isEventActive) return;
+  const original = cloneGrid(grid);
   let g = cloneGrid(grid);
   let result;
+  let transform = [];
   switch(dir){
-    case 0: result = moveLeftProcess(g); g = result.newGrid; break;
-    case 2: g = reverseRows(g); result = moveLeftProcess(g); g = reverseRows(result.newGrid); break;
-    case 3: g = transpose(g); result = moveLeftProcess(g); g = transpose(result.newGrid); break;
-    case 1: g = transpose(g); g = reverseRows(g); result = moveLeftProcess(g);
-            g = reverseRows(result.newGrid); g = transpose(g); break;
+    case 0: // left
+      result = moveLeftProcess(g);
+      g = result.newGrid;
+      break;
+    case 2: // right
+      g = reverseRows(g); transform.push('reverse');
+      result = moveLeftProcess(g);
+      g = reverseRows(result.newGrid);
+      result.moveMap = adaptMappingForTransform(result.moveMap, transform);
+      break;
+    case 3: // up
+      g = transpose(g); transform.push('transpose');
+      result = moveLeftProcess(g);
+      g = transpose(result.newGrid);
+      result.moveMap = adaptMappingForTransform(result.moveMap, transform);
+      break;
+    case 1: // down
+      g = transpose(g); transform.push('transpose');
+      g = reverseRows(g); transform.push('reverse');
+      result = moveLeftProcess(g);
+      g = reverseRows(result.newGrid);
+      g = transpose(g);
+      result.moveMap = adaptMappingForTransform(result.moveMap, transform);
+      break;
   }
   if (!result || !result.moved) return;
 
+  prevGrid = original;
   grid = g;
   score += result.gained;
-  if (score > best) {
+  if (score > best){
     best = score;
     localStorage.setItem(BEST_KEY, best);
   }
 
-  if (blindModeMovesLeft > 0) {
+  if (blindModeMovesLeft > 0){
     blindModeMovesLeft--;
-    if (blindModeMovesLeft <= 0) {
+    if (blindModeMovesLeft <= 0){
       blindMode = false;
       updateStatus('Blind ended.');
     } else {
@@ -163,7 +235,7 @@ function move(dir){
 
   spawnRandom();
   moves++;
-  render(result.mergedPositions);
+  render(result.mergedPositions, result.moveMap);
   if (ENABLE_WIN_CHECK) checkWin();
   checkEnd();
   maybeTriggerEvent();
@@ -182,13 +254,13 @@ function canMove(){
   return false;
 }
 function checkEnd(){
-  if (!canMove()) {
+  if (!canMove()){
     endGame('Game Over', `You scored ${score} in ${moves} moves.`);
   }
 }
 function checkWin(){
   for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++){
-    if (grid[r][c] === 2048) {
+    if (grid[r][c] === 2048){
       endGame('You Win!', `Reached 2048 in ${moves} moves. Score: ${score}.`);
       return;
     }
@@ -198,7 +270,7 @@ function endGame(title,text){
   if (gameOver) return;
   gameOver = true;
   disableInput();
-  if (score > best) {
+  if (score > best){
     best = score;
     localStorage.setItem(BEST_KEY, best);
   }
@@ -208,9 +280,27 @@ function endGame(title,text){
 }
 
 // ---------- Rendering ----------
-function render(mergedPositions = []){
+function render(mergedPositions = [], moveMap = []){
   const cells = gridEl.querySelectorAll('.cell');
-  cells.forEach((cell, i) => {
+  const changedSet = new Set();
+  if (prevGrid){
+    for (let r=0;r<SIZE;r++){
+      for (let c=0;c<SIZE;c++){
+        if (prevGrid[r][c] !== grid[r][c]){
+          changedSet.add(r*SIZE + c);
+        }
+      }
+    }
+  }
+  const movedDestIndices = new Set();
+  moveMap.forEach(m => {
+    if (m.from.some(f => f.r !== m.to.r || f.c !== m.to.c)){
+      movedDestIndices.add(m.to.r*SIZE + m.to.c);
+    }
+  });
+  const mergedIndices = new Set(mergedPositions.map(mp => mp.row*SIZE + mp.col));
+
+  cells.forEach((cell,i)=>{
     const r = (i / SIZE) | 0;
     const c = i % SIZE;
     const v = grid[r][c];
@@ -221,12 +311,12 @@ function render(mergedPositions = []){
       cell.textContent = '';
       return;
     }
-    if (blindMode) {
+    if (blindMode){
       cell.textContent = '?';
       cell.classList.add('t-large');
     } else {
       cell.textContent = v;
-      if (v <= MAX_STATIC_CLASS) {
+      if (v <= MAX_STATIC_CLASS){
         cell.classList.add(`t-${v}`);
         if (v >= 1024) cell.classList.add('t-large');
       } else {
@@ -236,26 +326,31 @@ function render(mergedPositions = []){
         cell.classList.add('t-large');
       }
     }
-  });
-
-  mergedPositions.forEach(mp => {
-    const idx = mp.row * SIZE + mp.col;
-    const cell = cells[idx];
-    if (cell){
-      cell.classList.add('merged');
-      setTimeout(() => cell.classList.remove('merged'), 180);
-    }
+    if (mergedIndices.has(i)) cell.classList.add('merged');
+    if (movedDestIndices.has(i)) cell.classList.add('moved');
+    if (changedSet.has(i)) cell.classList.add('value-changed');
+    if (lastSpawn && lastSpawn.r === r && lastSpawn.c === c) cell.classList.add('spawn');
   });
 
   scoreEl.textContent = score;
   bestEl.textContent = best;
+
+  // Remove transient classes after animations
+  setTimeout(()=> {
+    cells.forEach(cell => {
+      cell.classList.remove('moved','value-changed','spawn');
+    });
+    lastSpawn = null;
+  }, 260);
+
+  prevGrid = cloneGrid(grid);
 }
 
 // ---------- Event Trigger Policy ----------
 function eventShouldTrigger(maxTile){
   if (maxTile < 8) return false;
   if (EVENT_FOR_POWERS_ONLY && !isPowerOfTwo(maxTile)) return false;
-  switch (EVENT_TRIGGER_MODE) {
+  switch (EVENT_TRIGGER_MODE){
     case 'eachMax':
     case 'powerOfTwo':
       if (EVENT_TRIGGER_MODE === 'powerOfTwo' && !isPowerOfTwo(maxTile)) return false;
@@ -268,17 +363,15 @@ function eventShouldTrigger(maxTile){
       triggeredSet.add(maxTile);
       return true;
     case 'everyIncrement':
-      if (maxTile > lastMaxValue) {
+      if (maxTile > lastMaxValue){
         triggeredHistory.push(maxTile);
         lastMaxValue = maxTile;
         return true;
       }
       return false;
-    default:
-      return false;
+    default: return false;
   }
 }
-
 function maybeTriggerEvent(){
   if (isEventActive) return;
   if (moves - lastEventMove < EVENT_COOLDOWN) return;
@@ -289,7 +382,7 @@ function maybeTriggerEvent(){
   showEvent(maxTile);
 }
 
-// ---------- Effects (Chance & Fate) ----------
+// ---------- Effects ----------
 const chanceGoodEffects = [
   {
     id: 'AddMaxTile',
@@ -299,17 +392,18 @@ const chanceGoodEffects = [
       if (empties.length){
         const [r,c] = empties[(Math.random()*empties.length)|0];
         grid[r][c] = getMaxTile();
+        lastSpawn = {r,c};
       }
     }
   },
   {
     id: 'DoubleRandomSmallRank',
-    label: 'All tiles of a random small rank (2/4/8) doubled',
+    label: 'All tiles of a random small rank doubled',
     run: () => {
       const present = [2,4,8].filter(v => hasValue(v));
-      if (present.length === 0) return;
+      if (!present.length) return;
       const chosen = present[(Math.random()*present.length)|0];
-      iterateTiles((v,r,c)=>{ if (v===chosen) grid[r][c] = v*2; });
+      iterateTiles((v,r,c)=>{ if (v===chosen) grid[r][c]=v*2; });
     }
   },
   {
@@ -320,7 +414,8 @@ const chanceGoodEffects = [
         const empties = collectEmpties();
         if (!empties.length) return;
         const [r,c] = empties[(Math.random()*empties.length)|0];
-        grid[r][c] = Math.random() < 0.5 ? 4 : 8;
+        grid[r][c] = Math.random()<0.5?4:8;
+        lastSpawn = {r,c};
       }
     }
   },
@@ -334,12 +429,10 @@ const chanceGoodEffects = [
         if (v>0) tiles.push({v,r,c});
       }
       tiles.sort((a,b)=>a.v-b.v);
-      const pick = tiles.slice(0,3);
-      pick.forEach(t => { grid[t.r][t.c] = t.v*2; });
+      tiles.slice(0,3).forEach(t => grid[t.r][t.c]=t.v*2);
     }
   }
 ];
-
 const chanceHindranceEffects = [
   {
     id: 'HalveSingleMax',
@@ -354,8 +447,6 @@ const chanceHindranceEffects = [
     }
   }
 ];
-
-// Fate weighted effects
 const fateEffects = [
   {
     id:'AllBecomeMax', weight:5,
@@ -374,11 +465,11 @@ const fateEffects = [
       const empties = collectEmpties();
       if (empties.length){
         const [r,c] = empties[(Math.random()*empties.length)|0];
-        grid[r][c] = val;
+        grid[r][c]=val; lastSpawn={r,c};
       } else {
-        const all = collectAll();
+        const all=collectAll();
         const [r,c] = all[(Math.random()*all.length)|0];
-        grid[r][c] = val;
+        grid[r][c]=val; lastSpawn={r,c};
       }
     }
   },
@@ -386,13 +477,13 @@ const fateEffects = [
     id:'RandomFactorGlobal', weight:15,
     label:'Random global factor (×0.5 / ×2 / ×4 / ×8)',
     run: () => {
-      const roll = Math.random();
+      const roll=Math.random();
       let factor;
-      if (roll < 0.60) factor = 0.5;
-      else if (roll < 0.85) factor = 2;
-      else if (roll < 0.97) factor = 4;
-      else factor = 8;
-      iterateTiles((v,r,c)=>{ if (v!==0) grid[r][c] = Math.max(1, Math.floor(v*factor)); });
+      if (roll<0.60) factor=0.5;
+      else if (roll<0.85) factor=2;
+      else if (roll<0.97) factor=4;
+      else factor=8;
+      iterateTiles((v,r,c)=>{ if (v!==0) grid[r][c]=Math.max(1,Math.floor(v*factor)); });
     }
   },
   {
@@ -410,7 +501,7 @@ const fateEffects = [
   {
     id:'BlindFive', weight:10,
     label:'Blind mode for 5 moves',
-    run: () => { blindMode = true; blindModeMovesLeft = 5; }
+    run: () => { blindMode=true; blindModeMovesLeft=5; }
   },
   {
     id:'DecayAll', weight:15,
@@ -423,7 +514,7 @@ const fateEffects = [
     id:'PurgeRandomRow', weight:5,
     label:'One random row cleared',
     run: () => {
-      const row = (Math.random()*SIZE)|0;
+      const row=(Math.random()*SIZE)|0;
       for (let c=0;c<SIZE;c++) grid[row][c]=0;
     }
   },
@@ -431,7 +522,7 @@ const fateEffects = [
     id:'StripMaxTiles', weight:10,
     label:'All max tiles reduced (halved)',
     run: () => {
-      const m = getMaxTile();
+      const m=getMaxTile();
       iterateTiles((v,r,c)=>{ if (v===m) grid[r][c]=Math.max(1,Math.floor(v/2)); });
     }
   },
@@ -439,13 +530,13 @@ const fateEffects = [
     id:'ResetHalfBoard', weight:10,
     label:'Half of non-zero tiles reset to 2',
     run: () => {
-      const coords = [];
+      const coords=[];
       iterateTiles((v,r,c)=>{ if (v>0) coords.push([r,c]); });
       shuffleArray(coords);
-      const cut = Math.floor(coords.length/2);
+      const cut=Math.floor(coords.length/2);
       for (let i=0;i<cut;i++){
-        const [r,c] = coords[i];
-        grid[r][c] = 2;
+        const [r,c]=coords[i];
+        grid[r][c]=2;
       }
     }
   }
@@ -460,29 +551,30 @@ function showEvent(triggerValue){
   eventOptionsEl.innerHTML = '';
 
   addEventOption('Chance', 'Mostly helpful (small risk).', 'chance', () => {
+    prevGrid = cloneGrid(grid);
     const isGood = Math.random() < CHANCE_GOOD_RATIO;
     const pool = isGood ? chanceGoodEffects : chanceHindranceEffects;
     const chosen = pool[(Math.random()*pool.length)|0];
     chosen.run();
     closeEvent();
-    render();
+    render(); // diff from prevGrid will animate
     updateStatus(`Chance -> ${isGood ? 'Good' : 'Hindrance'}: ${chosen.label}`);
-    if (blindMode) updateStatus(`Chance -> ${isGood ? 'Good' : 'Hindrance'}: ${chosen.label} (Blind)`);
   });
 
   addEventOption('Fate', 'High risk gambling (heavier negatives).', 'fate', () => {
+    prevGrid = cloneGrid(grid);
     const chosen = weightedPick(fateEffects);
     chosen.run();
     closeEvent();
     render();
-    updateStatus(`Fate: ${chosen.label}${blindMode ? ' (Blind)' : ''}`);
+    updateStatus(`Fate: ${chosen.label}`);
   });
 
   eventOverlay.style.display = 'flex';
-  setTimeout(() => {
+  setTimeout(()=> {
     const first = eventOptionsEl.querySelector('.event-option');
     if (first) first.focus();
-  }, 20);
+  }, 30);
 }
 
 function addEventOption(title, desc, extraClass, handler){
@@ -533,7 +625,7 @@ function shuffleGrid(){
 }
 function shuffleArray(a){
   for (let i=a.length-1;i>0;i--){
-    const j = (Math.random()*(i+1))|0;
+    const j=(Math.random()*(i+1))|0;
     [a[i],a[j]]=[a[j],a[i]];
   }
 }
@@ -579,6 +671,7 @@ function touchEndHandler(){
   }
 }
 
+// ---------- Input Toggle ----------
 function disableInput(){
   window.removeEventListener('keydown', keyHandler);
   window.removeEventListener('touchstart', touchStartHandler);
@@ -598,7 +691,11 @@ function hideOverlays(){
   eventOverlay.style.display = 'none';
 }
 function updateStatus(msg){
-  if (statusBar) statusBar.textContent = msg;
+  if (!statusBar) return;
+  statusBar.textContent = msg;
+  statusBar.classList.remove('flash-status');
+  void statusBar.offsetWidth; // reflow to restart animation
+  statusBar.classList.add('flash-status');
 }
 
 // ---------- Buttons ----------
