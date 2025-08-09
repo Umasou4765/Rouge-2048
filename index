@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Rogue-2048 原型（离线）</title>
+<title>Rogue-2048 Prototype (Offline)</title>
 <style>
   :root{
     --bg:#f0f2f5; --cell:#cdc1b4; --empty:#eee4da;
@@ -47,70 +47,68 @@
 <body>
   <div class="container">
     <header>
-      <h1>Rogue-2048（原型）</h1>
+      <h1>Rogue-2048 (Prototype)</h1>
       <div class="stats">
-        <div class="card">分数: <span id="score">0</span></div>
-        <div class="card">最高: <span id="best">0</span></div>
+        <div class="card">Score: <span id="score">0</span></div>
+        <div class="card">Best: <span id="best">0</span></div>
       </div>
     </header>
 
     <div class="card" style="margin-bottom:12px;">
       <div style="display:flex;gap:10px;align-items:center;">
         <div>
-          玩家 HP: <strong id="playerHP">10</strong>
+          Player HP: <strong id="playerHP">10</strong>
           <div class="bar" style="width:140px;"><div id="playerHPbar" class="hp" style="width:100%"></div></div>
         </div>
         <div>
-          敌人 HP: <strong id="enemyHP">50</strong>
+          Enemy HP: <strong id="enemyHP">50</strong>
           <div class="bar" style="width:140px;"><div id="enemyHPbar" class="enemyhp" style="width:100%"></div></div>
         </div>
       </div>
-      <div class="info small">说明：合并方块会对敌人造成伤害（合并值 ÷ 8）。每 5 步敌人攻击一次。</div>
+      <div class="info small">Note: Merging tiles deals damage to the enemy (merged value ÷ 8). The enemy attacks every 5 moves.</div>
     </div>
 
     <div class="board">
       <div class="grid" id="grid">
-        <!-- 16 cells -->
-      </div>
+        </div>
     </div>
 
     <div class="controls">
-      <button id="btnRestart">重新开始</button>
-      <button id="btnUndo" class="ghost">撤销（1 步）</button>
-      <button id="btnHint" class="ghost">提示</button>
+      <button id="btnRestart">Restart</button>
+      <button id="btnUndo" class="ghost">Undo (1 Move)</button>
+      <button id="btnHint" class="ghost">Hint</button>
     </div>
 
-    <div class="msg" id="message">用方向键移动（← ↑ → ↓）。</div>
+    <div class="msg" id="message">Use arrow keys to move (← ↑ → ↓).</div>
     <div class="center small">
-      <div style="margin-top:8px;">步数: <span id="moves">0</span></div>
+      <div style="margin-top:8px;">Moves: <span id="moves">0</span></div>
     </div>
   </div>
 
 <script>
 /*
-  Rogue-2048 原型（简化实现）
-  - 4x4 2048 基础逻辑
-  - 合并时对敌人造成伤害（mergedValue / DAMAGE_DIV）
-  - 每 MOVE_TO_HIT 步敌人攻击玩家
-  - 简单的撤销（保存上一帧）
+  Rogue-2048 Prototype (Simplified implementation)
+  - 4x4 2048 core logic
+  - Merging deals damage to the enemy (mergedValue / DAMAGE_DIV)
+  - The enemy attacks the player every MOVE_TO_HIT moves
+  - Simple undo (saving the last state)
 */
 
 const SIZE = 4;
-const DAMAGE_DIV = 8;      // 合并值 / DAMAGE_DIV = 对敌人造成的伤害（向下取整）
-const MOVE_TO_HIT = 5;     // 每多少步敌人攻击一次
+const DAMAGE_DIV = 8;      // mergedValue / DAMAGE_DIV = damage dealt to enemy (floored)
+const MOVE_TO_HIT = 5;     // enemy attacks every N moves
 const PLAYER_MAX_HP = 10;
 const ENEMY_MAX_HP = 50;
 
 let grid = [];      // 2D array
-let tiles = [];     // 用于 DOM tile
 let score = 0;
 let best = parseInt(localStorage.getItem('rogue2048_best') || '0');
 let playerHP = PLAYER_MAX_HP;
 let enemyHP = ENEMY_MAX_HP;
 let moves = 0;
-let lastState = null; // 用于撤销（保存简单状态）
+let lastState = null; // for undo (saves a simple state)
 
-// DOM
+// DOM elements
 const gridEl = document.getElementById('grid');
 const scoreEl = document.getElementById('score');
 const bestEl = document.getElementById('best');
@@ -123,14 +121,14 @@ const movesEl = document.getElementById('moves');
 
 bestEl.textContent = best;
 
-// 初始化 DOM cells
+// Initialize DOM cells
 for (let i=0;i<SIZE*SIZE;i++){
   const div = document.createElement('div');
   div.className = 'cell';
   gridEl.appendChild(div);
 }
 
-// 游戏初始化
+// Game initialization
 function init(){
   grid = Array.from({length:SIZE}, ()=>Array(SIZE).fill(0));
   score = 0;
@@ -141,10 +139,10 @@ function init(){
   spawnRandom();
   spawnRandom();
   render();
-  setMessage('用方向键移动（← ↑ → ↓）。合并造成伤害，注意 HP！');
+  setMessage('Use arrow keys to move (← ↑ → ↓). Merge tiles to deal damage, but watch your HP!');
 }
 
-// 生成随机 2 或 4
+// Spawn a random 2 or 4 tile
 function spawnRandom(){
   const empties = [];
   for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (grid[r][c]===0) empties.push([r,c]);
@@ -154,9 +152,9 @@ function spawnRandom(){
   return true;
 }
 
-// 渲染
+// Render the game state to the DOM
 function render(){
-  // 清理 tile（移除以前的绝对定位 tile，只用 cell 文本渲染）
+  // Clear tiles (simplified: render text inside cells)
   const cells = document.querySelectorAll('.cell');
   cells.forEach((cell,i)=>{
     const r = Math.floor(i/SIZE), c = i%SIZE;
@@ -175,7 +173,7 @@ function render(){
   enemyBar.style.width = Math.max(0,(enemyHP/ENEMY_MAX_HP)*100) + '%';
 }
 
-// 深拷贝状态（用于撤销）
+// Deep copy state (for undo)
 function copyState(){
   return {
     grid: grid.map(row=>row.slice()),
@@ -183,7 +181,7 @@ function copyState(){
   };
 }
 
-// 恢复状态
+// Restore state
 function restoreState(s){
   grid = s.grid.map(row=>row.slice());
   score = s.score;
@@ -193,11 +191,11 @@ function restoreState(s){
   render();
 }
 
-// 检查是否还能移动
+// Check if a move is possible
 function canMove(){
-  // 空格存在
+  // Check for empty cells
   for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (grid[r][c]===0) return true;
-  // 相邻合并存在
+  // Check for adjacent same-value cells
   for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++){
     const v = grid[r][c];
     if (r+1<SIZE && grid[r+1][c]===v) return true;
@@ -206,15 +204,15 @@ function canMove(){
   return false;
 }
 
-// 移动（0:left,1:up,2:right,3:down）
+// Move (0:left, 1:up, 2:right, 3:down)
 function move(dir){
-  // 保存撤销
+  // Save state for undo
   lastState = copyState();
 
   let moved = false;
-  let damageThisMove = 0; // 累积对敌人的伤害
-  // 统一把移动转为“左移”逻辑，通过旋转 grid
-  function rotate90(g){ // 90度顺时针
+  let damageThisMove = 0; // Accumulate damage for this move
+  // Normalize move logic to "left" by rotating the grid
+  function rotate90(g){ // 90 degrees clockwise
     const n = g.length;
     const ng = Array.from({length:n}, ()=>Array(n).fill(0));
     for (let i=0;i<n;i++) for (let j=0;j<n;j++) ng[j][n-1-i] = g[i][j];
@@ -238,11 +236,10 @@ function move(dir){
         row.splice(i+1,1);
         score += merged;
         damageThisMove += Math.floor(merged / DAMAGE_DIV);
-        // mark moved
       }
     }
     while (row.length < SIZE) row.push(0);
-    // check moved
+    // check if a move occurred
     for (let c=0;c<SIZE;c++){
       if (g[r][c] !== row[c]) moved = true;
       g[r][c] = row[c];
@@ -253,24 +250,24 @@ function move(dir){
   for (let t=0;t<(4-times)%4;t++) g = rotate90(g);
 
   if (!moved) {
-    setMessage('没有移动发生。换个方向试试。');
+    setMessage('No move occurred. Try a different direction.');
     return;
   }
 
   grid = g.map(r=>r.slice());
-  // 造成伤害
+  // Deal damage
   if (damageThisMove>0){
     enemyHP -= damageThisMove;
-    setMessage('你造成了 ' + damageThisMove + ' 点伤害！');
+    setMessage('You dealt ' + damageThisMove + ' damage!');
   } else {
-    setMessage('移动成功，但没有合并（无伤害）。');
+    setMessage('Move successful, but no merge occurred (no damage).');
   }
-  // 更新最高分
+  // Update high score
   if (score > best){ best = score; localStorage.setItem('rogue2048_best', best); }
-  // spawn
+  // Spawn a new tile
   spawnRandom();
   moves++;
-  // 敌人攻击节奏
+  // Enemy attack cadence
   if (moves % MOVE_TO_HIT === 0){
     enemyAttack();
   }
@@ -278,37 +275,34 @@ function move(dir){
   checkEnd();
 }
 
-// 敌人攻击
+// Enemy attack
 function enemyAttack(){
-  const dmg = Math.max(1, Math.floor( (1 + Math.log1p(moves))/1 )); // 简单随步数增长
+  const dmg = Math.max(1, Math.floor( (1 + Math.log1p(moves))/1 )); // simple damage scaling with moves
   playerHP -= dmg;
-  setMessage('敌人发动攻击，造成 ' + dmg + ' 点伤害！');
+  setMessage('The enemy attacks, dealing ' + dmg + ' damage!');
 }
 
-// 检查胜负
+// Check for game end conditions
 function checkEnd(){
   if (enemyHP <= 0){
-    setMessage('你战胜了敌人！胜利！（可重开新局）');
-    // 奖励：加分
+    setMessage('You defeated the enemy! Victory! (You can restart)');
     score += enemyHP<=0 ? 100 : 0;
     if (score > best){ best = score; localStorage.setItem('rogue2048_best', best); }
     render();
-    // 暂停按键（简化：移除事件监听）
-    // 但保留重启和撤销
     return;
   }
   if (playerHP <= 0){
-    setMessage('你被敌人击败了，Game Over。按“重新开始”再试一次。');
+    setMessage('You were defeated by the enemy, Game Over. Press "Restart" to try again.');
     render();
     return;
   }
   if (!canMove()){
-    setMessage('没有可行动作，游戏结束（平局/失败）。');
+    setMessage('No more moves possible, Game Over (Draw/Loss).');
     return;
   }
 }
 
-// 按键事件
+// Key event listener
 window.addEventListener('keydown', (e)=>{
   if (['ArrowLeft','ArrowUp','ArrowRight','ArrowDown'].includes(e.key)){
     e.preventDefault();
@@ -317,22 +311,22 @@ window.addEventListener('keydown', (e)=>{
   }
 });
 
-// 控件
+// Control buttons
 document.getElementById('btnRestart').addEventListener('click', ()=>init());
 document.getElementById('btnUndo').addEventListener('click', ()=>{
-  if (lastState){ restoreState(lastState); lastState = null; setMessage('已撤销一步。'); }
-  else setMessage('没有可撤销的步。');
+  if (lastState){ restoreState(lastState); lastState = null; setMessage('Undid one move.'); }
+  else setMessage('No moves to undo.');
 });
 document.getElementById('btnHint').addEventListener('click', ()=>{
-  setMessage('提示：优先合并更高的方块，尽量留下一侧空位以方便移动。');
+  setMessage('Hint: Focus on merging higher value tiles, and try to keep one side clear for easy movement.');
 });
 
-// 小提示显示
+// Display message
 function setMessage(txt){
   messageEl.textContent = txt;
 }
 
-// 启动
+// Start the game
 init();
 
 </script>
