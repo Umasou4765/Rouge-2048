@@ -1,4 +1,4 @@
-/* Rogue-2048 (Endless + Chance/Fate + Animated Tiles) + Cheat Hold */
+/* Rogue-2048 */
 
 const SIZE = 4;
 const BEST_KEY = 'rogue2048_best_roguelike';
@@ -12,6 +12,7 @@ const EVENT_FOR_POWERS_ONLY = false;
 
 const CHANCE_GOOD_RATIO = 0.8;
 const CHEAT_HOLD_MS = 10000; 
+
 let tiles = [];
 let nextTileId = 1;
 let grid = [];
@@ -45,7 +46,6 @@ let tilesLayer;
 let bgCells = [];
 let cellPositions = null;
 
-// Cheat hold tracking
 let cheatTimerId = null;
 let cheatActive = false;
 
@@ -221,7 +221,7 @@ function move(dir){
         if (last.value === tile.value && !last.merged){
           last.value *= 2;
           last.merged = true;
-          tile.removed = true;
+            tile.removed = true;
           score += last.value;
           if (tile.prevRow!==last.row || tile.prevCol!==last.col) moved = true;
           return;
@@ -700,7 +700,8 @@ function shuffleArray(a){
   }
 }
 
-function startCheatHold(e){
+
+function startCheatHold(){
   if (!gameOver) return;
   if (cheatTimerId) clearTimeout(cheatTimerId);
   cheatActive = true;
@@ -720,11 +721,46 @@ function cancelCheatHold(){
   overlayTitle.classList.remove('holding');
 }
 function cheatContinueGame(){
+  rearrangeTopTwoRowsSorted();
   gameOver = false;
   endgameOverlay.style.display='none';
   enableInput();
   saveState();
   updateStatus('Cheat activated: continued.');
+  render();
+}
+
+function rearrangeTopTwoRowsSorted(){
+ 
+  let list = tiles.filter(t=>!t.removed);
+
+  list.sort((a,b)=>b.value - a.value);
+
+  const keep = list.slice(0, 8);
+  const remove = list.slice(8);
+  remove.forEach(t=> t.removed = true);
+
+
+  tiles.forEach(t=>{
+    if(!t.removed && (t.row===2 || t.row===3)) {
+  
+    }
+  });
+
+  // 5. 重新给前 8 个（或少于 8 个）分配位置：行 0-1，列 0-3
+  keep.forEach((t,i)=>{
+    const newRow = Math.floor(i/4);
+    const newCol = i%4;
+    t.prevRow = t.row;
+    t.prevCol = t.col;
+    t.row = newRow;
+    t.col = newCol;
+    t.new = true;
+  });
+
+  tiles = tiles.filter(t=>!t.removed);
+
+  syncGrid();
 }
 
 overlayTitle.addEventListener('pointerdown', startCheatHold);
@@ -741,7 +777,6 @@ document.getElementById('btnRestart2').addEventListener('click',()=>{
   init();
 });
 document.getElementById('btnCloseEvent').addEventListener('click',()=>closeEvent());
-
 
 document.addEventListener('DOMContentLoaded', ()=>{
   createGridUI();
