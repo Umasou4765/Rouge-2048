@@ -1,4 +1,3 @@
-/* Rogue-2048 (Endless + Chance/Fate + Animated Tiles) */
 
 const SIZE = 4;
 const BEST_KEY = 'rogue2048_best_roguelike';
