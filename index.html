@@ -4,69 +4,22 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Rogue-2048</title>
-<style>
-  :root{
-    --bg:#f0f2f5; --cell:#cdc1b4; --empty:#eee4da;
-    --tile-2:#eee4da; --tile-4:#ede0c8; --tile-8:#f2b179; --tile-16:#f59563;
-    --tile-32:#f67c5f; --tile-64:#f65e3b; --tile-big:#edcf72;
-  }
-  *{box-sizing:border-box}
-  body{font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial; background:var(--bg); margin:0; display:flex; justify-content:center; padding:24px;}
-  .container{width:460px;}
-  header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
-  h1{font-size:18px;margin:0;}
-  .stats{display:flex;gap:8px;}
-  .card{background:white;padding:8px 12px;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,0.08);font-size:13px;}
-  .board{background:#bbada0;padding:12px;border-radius:8px;position:relative;}
-  .grid{display:grid;grid-template-columns:repeat(4,86px);grid-gap:12px; padding:6px;}
-  .cell{width:86px;height:86px;border-radius:6px;background:var(--empty);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:26px;color:#776e65;position:relative;overflow:hidden;}
-  .controls{display:flex;gap:8px;margin-top:12px;}
-  button{padding:8px 10px;border-radius:6px;border:0;background:#2e7d32;color:white;cursor:pointer;}
-  button.ghost{background:#6d6d6d;color:#fff;}
-  .info{margin-top:8px;font-size:13px;color:#333;}
-  .bar{height:10px;background:#ddd;border-radius:6px;overflow:hidden;margin-top:6px;}
-  .hp{height:100%;background:#e53935;}
-  .enemyhp{height:100%;background:#8e24aa;}
-  .msg{margin-top:8px;font-size:14px;}
-  .small{font-size:12px;}
-  .center{display:flex;justify-content:center;}
-  /* tile colors */
-  .t-2{background:var(--tile-2); color:#776e65;}
-  .t-4{background:var(--tile-4); color:#776e65;}
-  .t-8{background:var(--tile-8); color:white;}
-  .t-16{background:var(--tile-16); color:white;}
-  .t-32{background:var(--tile-32); color:white;}
-  .t-64{background:var(--tile-64); color:white;}
-  .t-128{background:var(--tile-big); color:white; font-size:20px;}
-  .t-256{background:#f2a541; color:white; font-size:20px;}
-  .t-512{background:#e27c3f; color:white; font-size:18px;}
-  .t-1024{background:#e05555; color:white; font-size:16px;}
-  .t-2048{background:#3c9; color:white; font-size:16px;}
-  /* overlay */
-  .overlay{
-    position:fixed; inset:0; display:flex;align-items:center;justify-content:center;
-    background:rgba(0,0,0,0.45); z-index:50; display:none;
-  }
-  .overlay .panel{background:#fff;padding:20px;border-radius:10px;text-align:center;min-width:300px;}
-  .overlay h2{margin:0 0 8px 0;}
-  .meta{font-size:13px;color:#666;margin-top:6px;}
-</style>
 </head>
 <body>
   <div class="container">
     <header>
-      <h1>Rogue-2048 — Endless</h1>
+      <h1>Rogue-2048 </h1>
       <div class="stats">
         <div class="card">Score: <span id="score">0</span></div>
         <div class="card">Best: <span id="best">0</span></div>
       </div>
     </header>
 
-    <div class="card" style="margin-bottom:12px;">
-      <div style="display:flex;gap:12px;align-items:center;">
+    <div class="card" id="playerInfoCard">
+      <div id="playerHPContainer">
         <div>
           Player HP: <strong id="playerHP">10</strong>
-          <div class="bar" style="width:180px;"><div id="playerHPbar" class="hp" style="width:100%"></div></div>
+          <div class="bar" style="width:180px;"><div id="playerHPbar" class="hp"></div></div>
         </div>
         <div>
           Enemy Power: <strong id="enemyPower">1</strong>
@@ -87,17 +40,16 @@
     </div>
 
     <div class="msg" id="message">Use arrow keys to move (← ↑ → ↓). Merge to score and survive.</div>
-    <div class="center small" style="margin-top:8px;">
+    <div class="center small" id="movesInfo">
       <div>Moves: <span id="moves">0</span></div>
     </div>
   </div>
 
-  <!-- Game over overlay -->
   <div class="overlay" id="overlay">
     <div class="panel">
       <h2 id="overlayTitle">Game Over</h2>
       <div id="overlayText" class="meta">You survived X moves.</div>
-      <div style="margin-top:14px;">
+      <div id="overlayRestartContainer">
         <button id="overlayRestart">Restart</button>
       </div>
     </div>
@@ -112,13 +64,83 @@
   - Enemy "power" scales with moves; enemy attacks every N moves
   - Disable input after game over and show overlay
   - Removed the previous Note text from UI
+  - CSS converted to JavaScript for dynamic styling
 */
 
+// --- Styling Constants ---
+const STYLE_VARS = {
+  bg: '#f0f2f5',
+  cell: '#cdc1b4',
+  empty: '#eee4da',
+  tile2: '#eee4da',
+  tile4: '#ede0c8',
+  tile8: '#f2b179',
+  tile16: '#f59563',
+  tile32: '#f67c5f',
+  tile64: '#f65e3b',
+  tileBig: '#edcf72',
+  tile128: '#edcf72',
+  tile256: '#f2a541',
+  tile512: '#e27c3f',
+  tile1024: '#e05555',
+  tile2048: '#3c9',
+  tileColorDark: '#776e65',
+  tileColorLight: 'white',
+  boardBg: '#bbada0',
+  buttonBg: '#2e7d32',
+  buttonGhostBg: '#6d6d6d',
+  playerHPBg: '#e53935',
+  enemyHPBg: '#8e24aa',
+  shadowColor: 'rgba(0,0,0,0.08)',
+  overlayBg: 'rgba(0,0,0,0.45)',
+  panelBg: '#fff',
+  textColorPrimary: '#333',
+  textColorSecondary: '#666'
+};
+
+const TILE_COLORS = {
+  2: STYLE_VARS.tile2,
+  4: STYLE_VARS.tile4,
+  8: STYLE_VARS.tile8,
+  16: STYLE_VARS.tile16,
+  32: STYLE_VARS.tile32,
+  64: STYLE_VARS.tile64,
+  128: STYLE_VARS.tile128,
+  256: STYLE_VARS.tile256,
+  512: STYLE_VARS.tile512,
+  1024: STYLE_VARS.tile1024,
+  2048: STYLE_VARS.tile2048
+};
+
+const TILE_TEXT_COLORS = {
+    2: STYLE_VARS.tileColorDark,
+    4: STYLE_VARS.tileColorDark,
+    8: STYLE_VARS.tileColorLight,
+    16: STYLE_VARS.tileColorLight,
+    32: STYLE_VARS.tileColorLight,
+    64: STYLE_VARS.tileColorLight,
+    128: STYLE_VARS.tileColorLight,
+    256: STYLE_VARS.tileColorLight,
+    512: STYLE_VARS.tileColorLight,
+    1024: STYLE_VARS.tileColorLight,
+    2048: STYLE_VARS.tileColorLight
+};
+
+const TILE_FONT_SIZES = {
+    128: '20px',
+    256: '20px',
+    512: '18px',
+    1024: '16px',
+    2048: '16px'
+};
+
+// --- Game Constants ---
 const SIZE = 4;
-const DAMAGE_DIV = 8;      // mergedValue / DAMAGE_DIV -> base damage to enemy power (translated into score only)
-const MOVE_TO_HIT = 5;     // enemy attacks every N moves
+const DAMAGE_DIV = 8;
+const MOVE_TO_HIT = 5;
 const PLAYER_MAX_HP = 10;
 
+// --- Game State ---
 let grid = [];
 let score = 0;
 let best = parseInt(localStorage.getItem('rogue2048_best') || '0');
@@ -126,9 +148,9 @@ let playerHP = PLAYER_MAX_HP;
 let moves = 0;
 let lastState = null;
 let gameOver = false;
-let enemyPower = 1; // scales with moves for damage calc
+let enemyPower = 1;
 
-// DOM
+// --- DOM Elements ---
 const gridEl = document.getElementById('grid');
 const scoreEl = document.getElementById('score');
 const bestEl = document.getElementById('best');
@@ -141,6 +163,217 @@ const overlay = document.getElementById('overlay');
 const overlayTitle = document.getElementById('overlayTitle');
 const overlayText = document.getElementById('overlayText');
 
+// --- Styling Functions ---
+function applyGlobalStyles() {
+    const style = document.createElement('style');
+    style.textContent = `
+        *{box-sizing:border-box}
+        body{
+            font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial;
+            background:${STYLE_VARS.bg};
+            margin:0;
+            display:flex;
+            justify-content:center;
+            padding:24px;
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+function applyElementStyles() {
+    // .container
+    const container = document.querySelector('.container');
+    Object.assign(container.style, {
+        width: '460px'
+    });
+
+    // header
+    const header = document.querySelector('header');
+    Object.assign(header.style, {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '12px'
+    });
+
+    // h1
+    document.querySelector('h1').style.fontSize = '18px';
+    document.querySelector('h1').style.margin = '0';
+
+
+    // .stats
+    document.querySelector('.stats').style.display = 'flex';
+    document.querySelector('.stats').style.gap = '8px';
+
+    // .card
+    document.querySelectorAll('.card').forEach(card => {
+        Object.assign(card.style, {
+            background: 'white',
+            padding: '8px 12px',
+            borderRadius: '8px',
+            boxShadow: `0 2px 6px ${STYLE_VARS.shadowColor}`,
+            fontSize: '13px'
+        });
+    });
+    // Specific card styling
+    document.getElementById('playerInfoCard').style.marginBottom = '12px';
+    document.getElementById('playerHPContainer').style.display = 'flex';
+    document.getElementById('playerHPContainer').style.gap = '12px';
+    document.getElementById('playerHPContainer').style.alignItems = 'center';
+
+
+    // .board
+    const board = document.getElementById('board');
+    Object.assign(board.style, {
+        background: STYLE_VARS.boardBg,
+        padding: '12px',
+        borderRadius: '8px',
+        position: 'relative'
+    });
+
+    // .grid
+    const gridEl = document.getElementById('grid');
+    Object.assign(gridEl.style, {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4,86px)',
+        gridGap: '12px',
+        padding: '6px'
+    });
+
+    // .cell (base style)
+    const cells = document.querySelectorAll('.cell');
+    cells.forEach(cell => {
+        Object.assign(cell.style, {
+            width: '86px',
+            height: '86px',
+            borderRadius: '6px',
+            background: STYLE_VARS.empty,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: '700',
+            fontSize: '26px',
+            color: STYLE_VARS.tileColorDark,
+            position: 'relative',
+            overflow: 'hidden'
+        });
+    });
+
+    // .controls
+    const controls = document.querySelector('.controls');
+    Object.assign(controls.style, {
+        display: 'flex',
+        gap: '8px',
+        marginTop: '12px'
+    });
+
+    // button
+    document.querySelectorAll('button').forEach(button => {
+        Object.assign(button.style, {
+            padding: '8px 10px',
+            borderRadius: '6px',
+            border: '0',
+            background: STYLE_VARS.buttonBg,
+            color: 'white',
+            cursor: 'pointer'
+        });
+    });
+
+    // button.ghost
+    document.querySelectorAll('button.ghost').forEach(button => {
+        Object.assign(button.style, {
+            background: STYLE_VARS.buttonGhostBg,
+            color: '#fff'
+        });
+    });
+
+    // .info
+    document.querySelectorAll('.info').forEach(info => {
+        Object.assign(info.style, {
+            marginTop: '8px',
+            fontSize: '13px',
+            color: STYLE_VARS.textColorPrimary
+        });
+    });
+
+    // .bar
+    document.querySelectorAll('.bar').forEach(bar => {
+        Object.assign(bar.style, {
+            height: '10px',
+            background: '#ddd',
+            borderRadius: '6px',
+            overflow: 'hidden',
+            marginTop: '6px'
+        });
+    });
+
+    // .hp
+    document.querySelector('.hp').style.height = '100%';
+    document.querySelector('.hp').style.background = STYLE_VARS.playerHPBg;
+
+    // .enemyhp (not directly used but for consistency if added)
+    // No .enemyhp class in HTML, but kept for future proofing.
+    // const enemyHpBar = document.querySelector('.enemyhp');
+    // if (enemyHpBar) enemyHpBar.style.background = STYLE_VARS.enemyHPBg;
+
+    // .msg
+    document.querySelector('.msg').style.marginTop = '8px';
+    document.querySelector('.msg').style.fontSize = '14px';
+
+    // .small
+    document.querySelectorAll('.small').forEach(small => {
+        small.style.fontSize = '12px';
+    });
+    document.getElementById('movesInfo').style.marginTop = '8px';
+
+    // .center
+    document.querySelectorAll('.center').forEach(center => {
+        Object.assign(center.style, {
+            display: 'flex',
+            justifyContent: 'center'
+        });
+    });
+
+    // .overlay
+    Object.assign(overlay.style, {
+        position: 'fixed',
+        inset: '0',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: STYLE_VARS.overlayBg,
+        zIndex: '50',
+        display: 'none' // Hidden by default
+    });
+
+    // .overlay .panel
+    const panel = document.querySelector('.overlay .panel');
+    Object.assign(panel.style, {
+        background: STYLE_VARS.panelBg,
+        padding: '20px',
+        borderRadius: '10px',
+        textAlign: 'center',
+        minWidth: '300px'
+    });
+
+    // .overlay h2
+    document.querySelector('.overlay h2').style.margin = '0 0 8px 0';
+
+    // .overlay .meta
+    document.querySelectorAll('.overlay .meta').forEach(meta => {
+        Object.assign(meta.style, {
+            fontSize: '13px',
+            color: STYLE_VARS.textColorSecondary,
+            marginTop: '6px'
+        });
+    });
+
+    document.getElementById('overlayRestartContainer').style.marginTop = '14px';
+
+}
+
+// --- Game Logic ---
+
 bestEl.textContent = best;
 
 // build empty cells
@@ -148,14 +381,31 @@ function buildCells(){
   gridEl.innerHTML = '';
   for (let i=0;i<SIZE*SIZE;i++){
     const div = document.createElement('div');
-    div.className = 'cell';
+    div.className = 'cell'; // Apply base cell class for styling
     gridEl.appendChild(div);
   }
+  // Apply base cell styles once cells are built
+  document.querySelectorAll('.cell').forEach(cell => {
+        Object.assign(cell.style, {
+            width: '86px',
+            height: '86px',
+            borderRadius: '6px',
+            background: STYLE_VARS.empty,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: '700',
+            fontSize: '26px',
+            color: STYLE_VARS.tileColorDark,
+            position: 'relative',
+            overflow: 'hidden'
+        });
+    });
 }
 
 // init
 function init(){
-  buildCells();
+  buildCells(); // Rebuild cells on init
   grid = Array.from({length:SIZE}, ()=>Array(SIZE).fill(0));
   score = 0;
   playerHP = PLAYER_MAX_HP;
@@ -187,8 +437,18 @@ function render(){
   cells.forEach((cell,i)=>{
     const r = Math.floor(i/SIZE), c = i%SIZE;
     const v = grid[r][c];
+
     cell.textContent = v===0 ? '' : v;
-    cell.className = 'cell' + (v ? ' t-' + v : '');
+    // Dynamically apply tile styles
+    if (v !== 0) {
+        cell.style.background = TILE_COLORS[v] || STYLE_VARS.tileBig;
+        cell.style.color = TILE_TEXT_COLORS[v] || STYLE_VARS.tileColorLight;
+        cell.style.fontSize = TILE_FONT_SIZES[v] || '26px'; // Default font size
+    } else {
+        cell.style.background = STYLE_VARS.empty;
+        cell.style.color = STYLE_VARS.tileColorDark;
+        cell.style.fontSize = '26px';
+    }
   });
   scoreEl.textContent = score;
   bestEl.textContent = best;
@@ -227,9 +487,9 @@ function canMove(){
 }
 
 /*
- Standard 2048 movement with proper merge flags:
- We'll convert move to a left-move by rotating the matrix, perform move-left with merge flags,
- then rotate back.
+  Standard 2048 movement with proper merge flags:
+  We'll convert move to a left-move by rotating the matrix, perform move-left with merge flags,
+  then rotate back.
 */
 function rotate90(g){
   const n = g.length;
@@ -371,8 +631,12 @@ document.getElementById('btnHint').addEventListener('click', ()=>{
   setMessage('Hint: keep a corner for the biggest tile and avoid scattering large tiles.');
 });
 
-// start
-init();
+// Initial setup and styling application
+document.addEventListener('DOMContentLoaded', () => {
+    applyGlobalStyles();
+    applyElementStyles();
+    init();
+});
 
 </script>
 </body>
