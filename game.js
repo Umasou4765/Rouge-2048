@@ -1,3 +1,4 @@
+/* Rogue-2048 (Endless + Chance/Fate + Animated Tiles) */
 
 const SIZE = 4;
 const BEST_KEY = 'rogue2048_best_roguelike';
@@ -64,25 +65,6 @@ function createGridUI(){
   tilesLayer = document.createElement('div');
   tilesLayer.className = 'tiles';
   gridEl.appendChild(tilesLayer);
-  computeCellPositions();
-  window.addEventListener('resize', debounce(()=>{ computeCellPositions(); render(); },120));
-}
-
-function computeCellPositions(){
-  cellPositions = [];
-  const rectParent = gridEl.getBoundingClientRect();
-  bgCells.forEach((cell,i)=>{
-    const r = (i/SIZE)|0;
-    const c = i%SIZE;
-    const rct = cell.getBoundingClientRect();
-    cellPositions[r] = cellPositions[r] || [];
-    cellPositions[r][c] = {
-      x: rct.left - rectParent.left,
-      y: rct.top - rectParent.top,
-      w: rct.width,
-      h: rct.height
-    };
-  });
 }
 
 function init(){
@@ -314,15 +296,12 @@ function endGame(title,text){
 }
 
 function render(initial=false){
-  if (!cellPositions) computeCellPositions();
   const existing = new Map();
   tilesLayer.querySelectorAll('.tile').forEach(el=>{
     existing.set(+el.dataset.id, el);
   });
 
   tiles.forEach(tile=>{
-    const pos = cellPositions[tile.row][tile.col];
-    const prevPos = cellPositions[tile.prevRow][tile.prevCol];
     let el = existing.get(tile.id);
     const wasNew = tile.new;
     const wasMerged = tile.merged;
@@ -332,8 +311,8 @@ function render(initial=false){
       el.className = 'tile';
       el.dataset.id = tile.id;
       tilesLayer.appendChild(el);
-      el.style.setProperty('--x', prevPos.x+'px');
-      el.style.setProperty('--y', prevPos.y+'px');
+      el.style.setProperty('--row', tile.prevRow);
+      el.style.setProperty('--col', tile.prevCol);
       void el.offsetWidth;
     }
 
@@ -356,9 +335,9 @@ function render(initial=false){
 
     if (wasNew) el.classList.add('tile-new');
     if (wasMerged) el.classList.add('tile-merged');
-
-    el.style.setProperty('--x', pos.x+'px');
-    el.style.setProperty('--y', pos.y+'px');
+    
+    el.style.setProperty('--row', tile.row);
+    el.style.setProperty('--col', tile.col);
 
     tile.new = false;
     tile.merged = false;
