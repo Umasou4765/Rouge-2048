@@ -8,7 +8,7 @@
   --accent: #00bcd4;
   --accent-2: #3f51b5;
   --radius: 12px;
-  --transition: 140ms cubic-bezier(.25,.9,.35,1.2);
+  --transition: 200ms cubic-bezier(.25,.9,.35,1.2);
 }
 * { box-sizing: border-box; }
 html, body {
@@ -18,6 +18,7 @@ html, body {
   display:flex; justify-content:center; align-items:flex-start;
   padding:20px 10px; -webkit-font-smoothing:antialiased;
   font-weight:500; color:#212121;
+  overscroll-behavior-y: contain;
 }
 .container { width:100%; max-width:460px; }
 header { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
@@ -60,7 +61,7 @@ h1 { font-size:24px; margin:0; font-weight:700; letter-spacing:-0.5px; }
   height:calc((100% - 16px*3)/4);
   border-radius:12px;
   font-weight:800;
-  font-size:30px;
+  font-size:32px;
   display:flex;
   align-items:center;
   justify-content:center;
@@ -69,7 +70,7 @@ h1 { font-size:24px; margin:0; font-weight:700; letter-spacing:-0.5px; }
   transform:translate(var(--x),var(--y)) scale(1);
   transition: transform var(--transition), background var(--transition), color var(--transition);
   will-change: transform;
-  text-shadow:0 2px 4px rgba(0,0,0,0.25);
+  text-shadow:0 4px 6px rgba(0,0,0,0.4);
 }
 .tile.tile-new {
   animation: tilePopIn 260ms cubic-bezier(.25,1.4,.4,1);
@@ -89,8 +90,8 @@ h1 { font-size:24px; margin:0; font-weight:700; letter-spacing:-0.5px; }
   100% { transform:translate(var(--x),var(--y)) scale(1); }
 }
 
-.t-2 {background:#eee4da;color:#776e65;}
-.t-4 {background:#ede0c8;color:#776e65;}
+.t-2 {background:#eee4da;color:#333;}
+.t-4 {background:#ede0c8;color:#333;}
 .t-8 {background:#f2b179;}
 .t-16 {background:#f59563;}
 .t-32 {background:#f67c5f;}
@@ -100,7 +101,7 @@ h1 { font-size:24px; margin:0; font-weight:700; letter-spacing:-0.5px; }
 .t-512 {background:#edc850; font-size:24px;}
 .t-1024 {background:#edc53f; font-size:22px;}
 .t-2048 {background:#edc22e; font-size:20px;}
-.t-large { font-size:20px; }
+.t-large { font-size:28px; }
 
 .controls { display:flex; gap:10px; margin-top:16px; }
 button {
