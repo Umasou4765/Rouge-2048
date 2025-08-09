@@ -224,6 +224,8 @@ button:active { transform: translateY(2px); box-shadow: none; }
 </div>
 
 <script>
+/* Endless Rogue-2048 with Chance & Fate event system */
+
 const SIZE = 4;
 let grid = [];
 let score = 0;
@@ -232,6 +234,7 @@ let moves = 0;
 let gameOver = false;
 let isEventActive = false;
 let triggeredMultiples = new Set();
+
 const gridEl = document.getElementById('grid');
 const scoreEl = document.getElementById('score');
 const bestEl = document.getElementById('best');
@@ -241,8 +244,10 @@ const overlayTitle = document.getElementById('overlayTitle');
 const overlayText = document.getElementById('overlayText');
 const eventOptionsEl = document.getElementById('eventOptions');
 const overlayTextEvent = document.getElementById('overlayTextEvent');
+
 bestEl.textContent = best;
 
+/* ===== Core Rendering ===== */
 function createGridUI() {
   gridEl.innerHTML = '';
   for (let i = 0; i < SIZE * SIZE; i++) {
@@ -273,20 +278,20 @@ function render() {
   scoreEl.textContent = score;
   bestEl.textContent = best;
 
-  // Trigger rule unchanged: multiples of 8 (>=8) first time
+  // Event trigger: first time hitting each multiple of 8 >= 8
   if (!isEventActive && maxV >= 8 && maxV % 8 === 0 && !triggeredMultiples.has(maxV)) {
     triggeredMultiples.add(maxV);
     showEvent(maxV);
   }
 }
 
+/* ===== Game State Init ===== */
 function init() {
   createGridUI();
   grid = Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
   score = 0; moves = 0; gameOver = false; isEventActive = false;
   triggeredMultiples.clear();
-  spawnRandom();
-  spawnRandom();
+  spawnRandom(); spawnRandom();
   render();
   endgameOverlay.style.display = 'none';
   eventOverlay.style.display = 'none';
@@ -306,6 +311,7 @@ function spawnRandom() {
 
 function cloneGrid(g) { return g.map(row => row.slice()); }
 
+/* ===== Movement / Merge ===== */
 function moveLeftProcess(g) {
   let moved = false;
   let gained = 0;
@@ -346,14 +352,15 @@ function move(dir) {
   let result;
 
   switch (dir) {
-    case 0: result = moveLeftProcess(g); g = result.newGrid; break;
-    case 3: g = transpose(g); result = moveLeftProcess(g); g = transpose(result.newGrid); break;
-    case 2: g = reverseRows(g); result = moveLeftProcess(g); g = reverseRows(result.newGrid); break;
+    case 0: result = moveLeftProcess(g); g = result.newGrid; break;         // Left
+    case 3: g = transpose(g); result = moveLeftProcess(g); g = transpose(result.newGrid); break; // Up
+    case 2: g = reverseRows(g); result = moveLeftProcess(g); g = reverseRows(result.newGrid); break; // Right
     case 1: g = transpose(g); g = reverseRows(g); result = moveLeftProcess(g);
-            g = reverseRows(result.newGrid); g = transpose(g); break;
+            g = reverseRows(result.newGrid); g = transpose(g); break; // Down
   }
 
   if (!result || !result.moved) return;
+
   grid = g.map(r => r.slice());
   score += result.gained;
   if (score > best) {
@@ -366,6 +373,7 @@ function move(dir) {
   checkEnd();
 }
 
+/* ===== End Condition (Endless except no moves) ===== */
 function canMove() {
   for (let r = 0; r < SIZE; r++) {
     for (let c = 0; c < SIZE; c++) {
@@ -395,9 +403,21 @@ function endGame(title, text) {
   endgameOverlay.style.display = 'flex';
 }
 
-/* New Event System:
-   Category 1: Chance (random good/bad; each has 2 sub-effects)
-   Category 2: Fate (player chooses 1 of 5 chaotic effects)
+/* ===== Event System (Chance & Fate) =====
+   Chance:
+     - Randomly choose GOOD or BAD (50%)
+     - GOOD sub-effects (one chosen):
+        1) Add one tile equal to current max
+        2) Double all tiles of ONE random value among (2,4,8)
+     - BAD sub-effects (one chosen):
+        1) Halve the maximum tile
+        2) Halve all tiles of ONE random value among (4,8,16)
+   Fate (player selects 1 of 5):
+        1) Shuffle all tiles
+        2) Nothing happens
+        3) All tiles become maximum tile
+        4) All tiles become minimum non-zero tile
+        5) Gain (or replace) one 2048 tile
 */
 function showEvent(triggerValue) {
   isEventActive = true;
@@ -405,7 +425,6 @@ function showEvent(triggerValue) {
   overlayTextEvent.textContent = `Max tile ${triggerValue}. Choose Chance (random good or bad) or select a Fate effect.`;
   eventOptionsEl.innerHTML = '';
 
-  // Helpers
   function getMaxTile() {
     let maxTile = 0;
     for (let r = 0; r < SIZE; r++)
@@ -423,7 +442,6 @@ function showEvent(triggerValue) {
     return minTile === Infinity ? 0 : minTile;
   }
 
-  // Chance sub-effects definitions
   const chanceGood = [
     {
       id: 'good_add_max',
@@ -476,7 +494,6 @@ function showEvent(triggerValue) {
     }
   ];
 
-  // Fate (player selectable)
   const fateOptions = [
     {
       text: 'Shuffle all tiles',
@@ -538,34 +555,34 @@ function showEvent(triggerValue) {
     }
   ];
 
-  // Create Chance button (single)
+  // Chance label
   const chanceLabel = document.createElement('div');
   chanceLabel.className = 'category-label';
   chanceLabel.textContent = 'Chance';
   eventOptionsEl.appendChild(chanceLabel);
 
+  // Chance button
   const chanceBtn = document.createElement('div');
   chanceBtn.className = 'event-option';
   chanceBtn.innerHTML = `<strong>CHANCE</strong><br>Random good OR bad effect (50%)`;
   chanceBtn.onclick = () => {
-    // Decide good vs bad
     const goodOrBad = Math.random() < 0.5 ? 'good' : 'bad';
     const pool = goodOrBad === 'good' ? chanceGood : chanceBad;
     const effect = pool[Math.floor(Math.random()*pool.length)];
     effect.run();
     render();
-    // Show result message briefly then close
     overlayTextEvent.textContent = `Chance Result: ${goodOrBad.toUpperCase()} - ${effect.text}`;
     setTimeout(() => { closeEvent(); }, 800);
   };
   eventOptionsEl.appendChild(chanceBtn);
 
-  // Fate options (multiple selectable)
+  // Fate label
   const fateLabel = document.createElement('div');
   fateLabel.className = 'category-label';
   fateLabel.textContent = 'Fate';
   eventOptionsEl.appendChild(fateLabel);
 
+  // Fate buttons
   fateOptions.forEach((opt, idx) => {
     const btn = document.createElement('div');
     btn.className = 'event-option';
@@ -588,6 +605,7 @@ function closeEvent() {
   render();
 }
 
+/* ===== Input Handling ===== */
 function disableInput() {
   window.removeEventListener('keydown', keyHandler);
   window.removeEventListener('touchstart', touchStartHandler, { passive: true });
@@ -611,12 +629,8 @@ function keyHandler(e) {
   }
 }
 
-// Touch controls
-let touchStartX = 0;
-let touchStartY = 0;
-let touchEndX = 0;
-let touchEndY = 0;
-
+// Touch
+let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0;
 function touchStartHandler(e) {
   if (gameOver || isEventActive) return;
   if (e.touches.length === 1) {
@@ -639,14 +653,14 @@ function touchEndHandler() {
   const dy = touchEndY - touchStartY;
   if (Math.abs(dx) < 30 && Math.abs(dy) < 30) return;
   if (Math.abs(dx) > Math.abs(dy)) {
-    if (dx > 0) move(2); else move(0);
+    dx > 0 ? move(2) : move(0);
   } else {
-    if (dy > 0) move(1); else move(3);
+    dy > 0 ? move(1) : move(3);
   }
   touchStartX = touchStartY = touchEndX = touchEndY = 0;
 }
 
-// Buttons
+/* ===== Buttons ===== */
 document.getElementById('btnRestart').addEventListener('click', () => {
   init();
   endgameOverlay.style.display = 'none';
@@ -659,6 +673,7 @@ document.getElementById('btnCloseEvent').addEventListener('click', () => {
   closeEvent();
 });
 
+/* ===== Start Game ===== */
 init();
 </script>
 </body>
