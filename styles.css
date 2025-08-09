@@ -11,6 +11,7 @@
   --transition: 200ms cubic-bezier(.25,.9,.35,1.2);
   --grid-padding: 8px;
   --cell-gap: 12px;
+  --grid-size: 4;
 }
 * { box-sizing: border-box; }
 html, body {
@@ -41,7 +42,7 @@ h1 { font-size:24px; margin:0; font-weight:700; letter-spacing:-0.5px; }
   width:100%; max-width:400px; aspect-ratio:1/1;
   margin:0 auto;
   display:grid;
-  grid-template-columns:repeat(4,1fr);
+  grid-template-columns:repeat(var(--grid-size),1fr);
   gap:var(--cell-gap);
   padding:var(--cell-gap);
 }
@@ -59,8 +60,9 @@ h1 { font-size:24px; margin:0; font-weight:700; letter-spacing:-0.5px; }
 }
 .tile {
   position:absolute;
-  width:calc((100% - var(--cell-gap)*3)/4);
-  height:calc((100% - var(--cell-gap)*3)/4);
+  --cell-size: calc((100% - var(--cell-gap) * (var(--grid-size) - 1)) / var(--grid-size));
+  width: var(--cell-size);
+  height: var(--cell-size);
   border-radius:var(--radius);
   font-weight:800;
   font-size:32px;
@@ -69,7 +71,7 @@ h1 { font-size:24px; margin:0; font-weight:700; letter-spacing:-0.5px; }
   justify-content:center;
   user-select:none;
   color:#fff;
-  transform:translate(var(--x),var(--y)) scale(1);
+  transform:translate(calc(var(--col) * (var(--cell-size) + var(--cell-gap))), calc(var(--row) * (var(--cell-size) + var(--cell-gap)))) scale(1);
   transition: transform var(--transition), background var(--transition), color var(--transition);
   will-change: transform;
   text-shadow:0 2px 4px rgba(0,0,0,0.3);
@@ -82,14 +84,14 @@ h1 { font-size:24px; margin:0; font-weight:700; letter-spacing:-0.5px; }
   z-index:5;
 }
 @keyframes tilePopIn {
-  0% { transform:translate(var(--x),var(--y)) scale(.35); opacity:0; }
-  55% { transform:translate(var(--x),var(--y)) scale(1.12); opacity:1; }
-  100% { transform:translate(var(--x),var(--y)) scale(1); opacity:1; }
+  0% { transform:translate(calc(var(--col) * (var(--cell-size) + var(--cell-gap))), calc(var(--row) * (var(--cell-size) + var(--cell-gap)))) scale(.35); opacity:0; }
+  55% { transform:translate(calc(var(--col) * (var(--cell-size) + var(--cell-gap))), calc(var(--row) * (var(--cell-size) + var(--cell-gap)))) scale(1.12); opacity:1; }
+  100% { transform:translate(calc(var(--col) * (var(--cell-size) + var(--cell-gap))), calc(var(--row) * (var(--cell-size) + var(--cell-gap)))) scale(1); opacity:1; }
 }
 @keyframes tilePulse {
-  0% { transform:translate(var(--x),var(--y)) scale(1); }
-  45% { transform:translate(var(--x),var(--y)) scale(1.16); }
-  100% { transform:translate(var(--x),var(--y)) scale(1); }
+  0% { transform:translate(calc(var(--col) * (var(--cell-size) + var(--cell-gap))), calc(var(--row) * (var(--cell-size) + var(--cell-gap)))) scale(1); }
+  45% { transform:translate(calc(var(--col) * (var(--cell-size) + var(--cell-gap))), calc(var(--row) * (var(--cell-size) + var(--cell-gap)))) scale(1.16); }
+  100% { transform:translate(calc(var(--col) * (var(--cell-size) + var(--cell-gap))), calc(var(--row) * (var(--cell-size) + var(--cell-gap)))) scale(1); }
 }
 .t-2 {background:#eee4da;color:#776e65;}
 .t-4 {background:#ede0c8;color:#776e65;}
