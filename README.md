@@ -19,7 +19,6 @@ Choose wisely! These events will change your strategy and make every game unique
 **Features:**
 - Classic 2048 gameplay with a roguelike element.
 - Random events to keep the game fresh and challenging.
-- "Undo" button to revert your last move.
 - Simple, clean, and responsive design.
 
 ***
