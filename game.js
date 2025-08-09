@@ -117,7 +117,6 @@ function init(){
     spawnRandom(); spawnRandom();
     updateStatus('New game started.');
   }
-  
   syncGrid();
   hideOverlays();
   enableInput();
@@ -167,13 +166,7 @@ function syncGrid(){
 function getMaxTile(){
   let m=0; tiles.forEach(t=>{ if(!t.removed && t.value>m) m=t.value; }); return m;
 }
-function getMinNonZero(){
-  let mn=Infinity;
-  tiles.forEach(t=>{
-    if(!t.removed && t.value>0 && t.value<mn) mn=t.value;
-  });
-  return mn===Infinity?0:mn;
-}
+
 function collectEmpties(){
   const occ = Array.from({length:SIZE},()=>Array(SIZE).fill(false));
   tiles.forEach(t=>{ if(!t.removed) occ[t.row][t.col]=true; });
@@ -193,7 +186,6 @@ function iterateTiles(fn){
 function move(dir){
   if (gameOver || isEventActive) return;
   let moved=false;
-  let gained=0;
 
   tiles.forEach(t=>{
     t.prevRow = t.row;
@@ -314,7 +306,7 @@ function endGame(title,text){
   localStorage.removeItem(STATE_KEY);
 }
 
-function render(initial=false){
+function render(){
   if (!cellPositions) computeCellPositions();
   const existing = new Map();
   tilesLayer.querySelectorAll('.tile').forEach(el=>{
@@ -462,7 +454,7 @@ const chanceHindranceEffects = [
       const arr = tiles.filter(t=>!t.removed && t.value===m);
       if (!arr.length) return;
       const t = arr[(Math.random()*arr.length)|0];
-      t.value = Math.max(1, Math.floor(t.value/2));
+      t.value = Math.max(2, Math.floor(t.value/2));
       syncGrid();
     }
   }
@@ -505,7 +497,7 @@ const fateEffects = [
       else if (roll<0.85) factor=2;
       else if (roll<0.97) factor=4;
       else factor=8;
-      tiles.forEach(t=>{ if(!t.removed) t.value=Math.max(1,Math.floor(t.value*factor)); });
+      tiles.forEach(t=>{ if(!t.removed) t.value=Math.max(2,Math.floor(t.value*factor)); });
       syncGrid();
     }
   },
@@ -527,7 +519,7 @@ const fateEffects = [
     id:'HalveAllAbove32', weight:15,
     label:'All tiles ≥32 halved',
     run:()=>{
-      tiles.forEach(t=>{ if(!t.removed && t.value>=32) t.value=Math.max(1,Math.floor(t.value/2)); });
+      tiles.forEach(t=>{ if(!t.removed && t.value>=32) t.value=Math.max(2,Math.floor(t.value/2)); });
       syncGrid();
     }
   },
@@ -542,7 +534,7 @@ const fateEffects = [
     id:'DecayAll', weight:15,
     label:'All tiles halved',
     run:()=>{
-      tiles.forEach(t=>{ if(!t.removed) t.value=Math.max(1,Math.floor(t.value/2)); });
+      tiles.forEach(t=>{ if(!t.removed) t.value=Math.max(2,Math.floor(t.value/2)); });
       syncGrid();
     }
   },
@@ -561,7 +553,7 @@ const fateEffects = [
     label:'All max tiles reduced (halved)',
     run:()=>{
       const m = getMaxTile();
-      tiles.forEach(t=>{ if(!t.removed && t.value===m) t.value=Math.max(1,Math.floor(t.value/2)); });
+      tiles.forEach(t=>{ if(!t.removed && t.value===m) t.value=Math.max(2,Math.floor(t.value/2)); });
       syncGrid();
     }
   },
