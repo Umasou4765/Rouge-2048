@@ -3,31 +3,33 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Rogue-2048 Prototype (Offline)</title>
+<title>Rogue-2048</title>
 <style>
   :root{
     --bg:#f0f2f5; --cell:#cdc1b4; --empty:#eee4da;
     --tile-2:#eee4da; --tile-4:#ede0c8; --tile-8:#f2b179; --tile-16:#f59563;
     --tile-32:#f67c5f; --tile-64:#f65e3b; --tile-big:#edcf72;
   }
+  *{box-sizing:border-box}
   body{font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial; background:var(--bg); margin:0; display:flex; justify-content:center; padding:24px;}
-  .container{width:420px;}
+  .container{width:460px;}
   header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
   h1{font-size:18px;margin:0;}
   .stats{display:flex;gap:8px;}
   .card{background:white;padding:8px 12px;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,0.08);font-size:13px;}
   .board{background:#bbada0;padding:12px;border-radius:8px;position:relative;}
-  .grid{display:grid;grid-template-columns:repeat(4,80px);grid-gap:12px;}
-  .cell{width:80px;height:80px;border-radius:6px;background:var(--empty);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:22px;color:#776e65;position:relative;overflow:hidden;}
-  .tile{position:absolute; width:80px;height:80px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:22px;transition:transform 120ms ease, top 120ms ease, left 120ms ease;}
+  .grid{display:grid;grid-template-columns:repeat(4,86px);grid-gap:12px; padding:6px;}
+  .cell{width:86px;height:86px;border-radius:6px;background:var(--empty);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:26px;color:#776e65;position:relative;overflow:hidden;}
   .controls{display:flex;gap:8px;margin-top:12px;}
   button{padding:8px 10px;border-radius:6px;border:0;background:#2e7d32;color:white;cursor:pointer;}
-  button.ghost{background:#6d6d6d;}
+  button.ghost{background:#6d6d6d;color:#fff;}
   .info{margin-top:8px;font-size:13px;color:#333;}
   .bar{height:10px;background:#ddd;border-radius:6px;overflow:hidden;margin-top:6px;}
   .hp{height:100%;background:#e53935;}
   .enemyhp{height:100%;background:#8e24aa;}
   .msg{margin-top:8px;font-size:14px;}
+  .small{font-size:12px;}
+  .center{display:flex;justify-content:center;}
   /* tile colors */
   .t-2{background:var(--tile-2); color:#776e65;}
   .t-4{background:var(--tile-4); color:#776e65;}
@@ -40,14 +42,20 @@
   .t-512{background:#e27c3f; color:white; font-size:18px;}
   .t-1024{background:#e05555; color:white; font-size:16px;}
   .t-2048{background:#3c9; color:white; font-size:16px;}
-  .small{font-size:12px;}
-  .center{display:flex;justify-content:center;}
+  /* overlay */
+  .overlay{
+    position:fixed; inset:0; display:flex;align-items:center;justify-content:center;
+    background:rgba(0,0,0,0.45); z-index:50; display:none;
+  }
+  .overlay .panel{background:#fff;padding:20px;border-radius:10px;text-align:center;min-width:300px;}
+  .overlay h2{margin:0 0 8px 0;}
+  .meta{font-size:13px;color:#666;margin-top:6px;}
 </style>
 </head>
 <body>
   <div class="container">
     <header>
-      <h1>Rogue-2048 (Prototype)</h1>
+      <h1>Rogue-2048 — Endless</h1>
       <div class="stats">
         <div class="card">Score: <span id="score">0</span></div>
         <div class="card">Best: <span id="best">0</span></div>
@@ -55,93 +63,115 @@
     </header>
 
     <div class="card" style="margin-bottom:12px;">
-      <div style="display:flex;gap:10px;align-items:center;">
+      <div style="display:flex;gap:12px;align-items:center;">
         <div>
           Player HP: <strong id="playerHP">10</strong>
-          <div class="bar" style="width:140px;"><div id="playerHPbar" class="hp" style="width:100%"></div></div>
+          <div class="bar" style="width:180px;"><div id="playerHPbar" class="hp" style="width:100%"></div></div>
         </div>
         <div>
-          Enemy HP: <strong id="enemyHP">50</strong>
-          <div class="bar" style="width:140px;"><div id="enemyHPbar" class="enemyhp" style="width:100%"></div></div>
+          Enemy Power: <strong id="enemyPower">1</strong>
+          <div class="meta small">Enemy power slowly scales with moves (affects damage).</div>
         </div>
       </div>
-      <div class="info small">Note: Merging tiles deals damage to the enemy (merged value ÷ 8). The enemy attacks every 5 moves.</div>
+      <div class="info small">Endless mode — survive as many moves as possible. Merge tiles to score and provoke weaponized attacks.</div>
     </div>
 
-    <div class="board">
-      <div class="grid" id="grid">
-        </div>
+    <div class="board" id="board">
+      <div class="grid" id="grid"></div>
     </div>
 
     <div class="controls">
       <button id="btnRestart">Restart</button>
-      <button id="btnUndo" class="ghost">Undo (1 Move)</button>
+      <button id="btnUndo" class="ghost">Undo (1)</button>
+      <button id="btnHint" class="ghost">Hint</button>
     </div>
 
-    <div class="msg" id="message">Use arrow keys to move (← ↑ → ↓).</div>
-    <div class="center small">
-      <div style="margin-top:8px;">Moves: <span id="moves">0</span></div>
+    <div class="msg" id="message">Use arrow keys to move (← ↑ → ↓). Merge to score and survive.</div>
+    <div class="center small" style="margin-top:8px;">
+      <div>Moves: <span id="moves">0</span></div>
+    </div>
+  </div>
+
+  <!-- Game over overlay -->
+  <div class="overlay" id="overlay">
+    <div class="panel">
+      <h2 id="overlayTitle">Game Over</h2>
+      <div id="overlayText" class="meta">You survived X moves.</div>
+      <div style="margin-top:14px;">
+        <button id="overlayRestart">Restart</button>
+      </div>
     </div>
   </div>
 
 <script>
 /*
-  Rogue-2048 Prototype (Simplified implementation)
-  - 4x4 2048 core logic
-  - Merging deals damage to the enemy (mergedValue / DAMAGE_DIV)
-  - The enemy attacks the player every MOVE_TO_HIT moves
-  - Simple undo (saving the last state)
+  Improved Rogue-2048 — Endless mode
+  Changes:
+  - Proper 2048 merge logic (no double-merge in same move)
+  - End condition: player HP <= 0 OR no moves
+  - Enemy "power" scales with moves; enemy attacks every N moves
+  - Disable input after game over and show overlay
+  - Removed the previous Note text from UI
 */
 
 const SIZE = 4;
-const DAMAGE_DIV = 8;      // mergedValue / DAMAGE_DIV = damage dealt to enemy (floored)
+const DAMAGE_DIV = 8;      // mergedValue / DAMAGE_DIV -> base damage to enemy power (translated into score only)
 const MOVE_TO_HIT = 5;     // enemy attacks every N moves
 const PLAYER_MAX_HP = 10;
-const ENEMY_MAX_HP = 50;
 
-let grid = [];      // 2D array
+let grid = [];
 let score = 0;
 let best = parseInt(localStorage.getItem('rogue2048_best') || '0');
 let playerHP = PLAYER_MAX_HP;
-let enemyHP = ENEMY_MAX_HP;
 let moves = 0;
-let lastState = null; // for undo (saves a simple state)
+let lastState = null;
+let gameOver = false;
+let enemyPower = 1; // scales with moves for damage calc
 
-// DOM elements
+// DOM
 const gridEl = document.getElementById('grid');
 const scoreEl = document.getElementById('score');
 const bestEl = document.getElementById('best');
 const playerHPEl = document.getElementById('playerHP');
-const enemyHPEl = document.getElementById('enemyHP');
 const playerBar = document.getElementById('playerHPbar');
-const enemyBar = document.getElementById('enemyHPbar');
 const messageEl = document.getElementById('message');
 const movesEl = document.getElementById('moves');
+const enemyPowerEl = document.getElementById('enemyPower');
+const overlay = document.getElementById('overlay');
+const overlayTitle = document.getElementById('overlayTitle');
+const overlayText = document.getElementById('overlayText');
 
 bestEl.textContent = best;
 
-// Initialize DOM cells
-for (let i=0;i<SIZE*SIZE;i++){
-  const div = document.createElement('div');
-  div.className = 'cell';
-  gridEl.appendChild(div);
+// build empty cells
+function buildCells(){
+  gridEl.innerHTML = '';
+  for (let i=0;i<SIZE*SIZE;i++){
+    const div = document.createElement('div');
+    div.className = 'cell';
+    gridEl.appendChild(div);
+  }
 }
 
-// Game initialization
+// init
 function init(){
+  buildCells();
   grid = Array.from({length:SIZE}, ()=>Array(SIZE).fill(0));
   score = 0;
   playerHP = PLAYER_MAX_HP;
-  enemyHP = ENEMY_MAX_HP;
   moves = 0;
   lastState = null;
+  gameOver = false;
+  enemyPower = 1;
   spawnRandom();
   spawnRandom();
   render();
-  setMessage('Use arrow keys to move (← ↑ → ↓). Merge tiles to deal damage, but watch your HP!');
+  setMessage('Use arrow keys to move. Survive as long as you can!');
+  hideOverlay();
+  enableInput();
 }
 
-// Spawn a random 2 or 4 tile
+// spawn 2 or 4
 function spawnRandom(){
   const empties = [];
   for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (grid[r][c]===0) empties.push([r,c]);
@@ -151,7 +181,7 @@ function spawnRandom(){
   return true;
 }
 
-// Render the game state to the DOM
+// render
 function render(){
   const cells = document.querySelectorAll('.cell');
   cells.forEach((cell,i)=>{
@@ -160,35 +190,35 @@ function render(){
     cell.textContent = v===0 ? '' : v;
     cell.className = 'cell' + (v ? ' t-' + v : '');
   });
-
   scoreEl.textContent = score;
-  playerHPEl.textContent = playerHP;
-  enemyHPEl.textContent = enemyHP;
   bestEl.textContent = best;
+  playerHPEl.textContent = playerHP;
   movesEl.textContent = moves;
   playerBar.style.width = Math.max(0,(playerHP/PLAYER_MAX_HP)*100) + '%';
-  enemyBar.style.width = Math.max(0,(enemyHP/ENEMY_MAX_HP)*100) + '%';
+  enemyPowerEl.textContent = enemyPower.toFixed(2);
 }
 
-// Deep copy state (for undo)
+// copy state for undo
 function copyState(){
   return {
-    grid: grid.map(row=>row.slice()),
-    score, playerHP, enemyHP, moves
+    grid: grid.map(r=>r.slice()),
+    score, playerHP, moves, enemyPower
   };
 }
-
-// Restore state
 function restoreState(s){
-  ({ grid, score, playerHP, enemyHP, moves } = s);
+  grid = s.grid.map(r=>r.slice());
+  score = s.score;
+  playerHP = s.playerHP;
+  moves = s.moves;
+  enemyPower = s.enemyPower;
   render();
 }
 
-// Check if a move is possible
+// check moves possible
 function canMove(){
-  for (let r=0;r<SIZE;r++) {
-    for (let c=0;c<SIZE;c++) {
-      if (grid[r][c] === 0) return true;
+  for (let r=0;r<SIZE;r++){
+    for (let c=0;c<SIZE;c++){
+      if (grid[r][c]===0) return true;
       if (r+1<SIZE && grid[r+1][c]===grid[r][c]) return true;
       if (c+1<SIZE && grid[r][c+1]===grid[r][c]) return true;
     }
@@ -196,120 +226,152 @@ function canMove(){
   return false;
 }
 
-// Move (0:left, 1:up, 2:right, 3:down)
-function move(dir){
+/*
+ Standard 2048 movement with proper merge flags:
+ We'll convert move to a left-move by rotating the matrix, perform move-left with merge flags,
+ then rotate back.
+*/
+function rotate90(g){
+  const n = g.length;
+  const ng = Array.from({length:n}, ()=>Array(n).fill(0));
+  for (let i=0;i<n;i++) for (let j=0;j<n;j++) ng[j][n-1-i] = g[i][j];
+  return ng;
+}
+
+function move(dir){ // 0:left 1:up 2:right 3:down
+  if (gameOver) return;
   lastState = copyState();
 
-  let moved = false;
-  let damageThisMove = 0;
-  
-  function rotate90(g){ 
-    const n = g.length;
-    const ng = Array.from({length:n}, ()=>Array(n).fill(0));
-    for (let i=0;i<n;i++) for (let j=0;j<n;j++) ng[j][n-1-i] = g[i][j];
-    return ng;
-  }
-  
-  let times = dir; // 0, 1, 2, 3 maps directly to rotate times
+  let times = dir % 4;
   let g = grid.map(r=>r.slice());
   for (let t=0;t<times;t++) g = rotate90(g);
 
+  let moved = false;
+  let damageThisMove = 0;
+
   for (let r=0;r<SIZE;r++){
-    let row = g[r].filter(v=>v!==0);
-    for (let i=0;i<row.length-1;i++){
-      if (row[i] === row[i+1]){
-        const merged = row[i]*2;
-        row[i] = merged;
-        row.splice(i+1,1);
+    // compress current row to the left with merge rules
+    const row = g[r].filter(v=>v!==0);
+    const newRow = [];
+    let skip = false;
+    for (let i=0;i<row.length;i++){
+      if (skip){ skip = false; continue; }
+      if (i+1 < row.length && row[i] === row[i+1]){
+        // merge row[i] and row[i+1]
+        const merged = row[i] * 2;
+        newRow.push(merged);
         score += merged;
+        // damage contribution (in this endless mode we translate merged->score, but also modify enemyPower scaling)
         damageThisMove += Math.floor(merged / DAMAGE_DIV);
+        skip = true;
+      } else {
+        newRow.push(row[i]);
       }
     }
-    while (row.length < SIZE) row.push(0);
-    
+    while (newRow.length < SIZE) newRow.push(0);
     for (let c=0;c<SIZE;c++){
-      if (g[r][c] !== row[c]) moved = true;
-      g[r][c] = row[c];
+      if (g[r][c] !== newRow[c]) moved = true;
+      g[r][c] = newRow[c];
     }
   }
 
+  // rotate back
   for (let t=0;t<(4-times)%4;t++) g = rotate90(g);
 
-  if (!moved) {
-    setMessage('No move occurred. Try a different direction.');
+  if (!moved){
+    setMessage('No move happened — try another direction.');
     return;
   }
 
   grid = g.map(r=>r.slice());
 
-  if (damageThisMove>0){
-    enemyHP -= damageThisMove;
-    setMessage('You dealt ' + damageThisMove + ' damage!');
-  } else {
-    setMessage('Move successful, but no merge occurred (no damage).');
-  }
-  
+  // score already updated
   if (score > best){ best = score; localStorage.setItem('rogue2048_best', best); }
-  
+
+  // enemyPower increases slightly based on merged value (simple scaling)
+  if (damageThisMove > 0){
+    // increase enemy power so attacks grow over time
+    enemyPower += damageThisMove * 0.03;
+    setMessage('Merged! Score increased. Enemy power +'+(damageThisMove*0.03).toFixed(2));
+  } else {
+    setMessage('Moved (no merges).');
+  }
+
+  // spawn new tile
   spawnRandom();
   moves++;
-  
+
+  // enemy attacks every MOVE_TO_HIT moves
   if (moves % MOVE_TO_HIT === 0){
     enemyAttack();
   }
+
   render();
   checkEnd();
 }
 
-// Enemy attack
 function enemyAttack(){
-  const dmg = Math.max(1, Math.floor( (1 + Math.log1p(moves))/1 ));
-  playerHP -= dmg;
-  setMessage('The enemy attacks, dealing ' + dmg + ' damage!');
+  // damage scales with enemyPower and a little with moves (keeps difficulty rising)
+  const base = Math.max(1, Math.floor(enemyPower + Math.log1p(moves) * 0.5));
+  playerHP -= base;
+  setMessage('Enemy attacks for ' + base + ' damage!');
+  // small bump to power to keep pressure
+  enemyPower *= 1.02;
 }
 
-// Check for game end conditions
+// check end conditions
 function checkEnd(){
-  if (enemyHP <= 0){
-    setMessage('You defeated the enemy! Victory! (You can restart)');
-    score += 100;
-    if (score > best){ best = score; localStorage.setItem('rogue2048_best', best); }
-    render();
-    return;
-  }
   if (playerHP <= 0){
-    setMessage('You were defeated by the enemy, Game Over. Press "Restart" to try again.');
+    playerHP = 0;
     render();
+    endGame(false, 'You were defeated. Survived ' + moves + ' moves, score ' + score + '.');
     return;
   }
   if (!canMove()){
-    setMessage('No more moves possible, Game Over (Draw/Loss).');
+    render();
+    endGame(false, 'No more moves available. Survived ' + moves + ' moves, score ' + score + '.');
     return;
   }
+  // otherwise continue
 }
 
-// Key event listener
-window.addEventListener('keydown', (e)=>{
+function endGame(victory=false, text='Game Over'){
+  gameOver = true;
+  disableInput();
+  if (score > best){ best = score; localStorage.setItem('rogue2048_best', best); }
+  overlayTitle.textContent = victory ? 'Victory' : 'Game Over';
+  overlayText.textContent = text + ' (Best: ' + best + ')';
+  showOverlay();
+}
+
+// UI helpers
+function setMessage(txt){ messageEl.textContent = txt; }
+function showOverlay(){ overlay.style.display = 'flex'; }
+function hideOverlay(){ overlay.style.display = 'none'; }
+
+// input handling
+let keyHandler = (e)=>{
   if (['ArrowLeft','ArrowUp','ArrowRight','ArrowDown'].includes(e.key)){
     e.preventDefault();
     const map = {ArrowLeft:0, ArrowUp:1, ArrowRight:2, ArrowDown:3};
     move(map[e.key]);
   }
-});
+};
+function enableInput(){ window.addEventListener('keydown', keyHandler); }
+function disableInput(){ window.removeEventListener('keydown', keyHandler); }
 
-// Control buttons
+// controls
 document.getElementById('btnRestart').addEventListener('click', ()=>init());
+document.getElementById('overlayRestart').addEventListener('click', ()=>init());
 document.getElementById('btnUndo').addEventListener('click', ()=>{
-  if (lastState){ restoreState(lastState); lastState = null; setMessage('Undid one move.'); }
-  else setMessage('No moves to undo.');
+  if (lastState && !gameOver){ restoreState(lastState); lastState = null; setMessage('Undo successful.'); }
+  else setMessage('No move to undo.');
+});
+document.getElementById('btnHint').addEventListener('click', ()=>{
+  setMessage('Hint: keep a corner for the biggest tile and avoid scattering large tiles.');
 });
 
-// Display message
-function setMessage(txt){
-  messageEl.textContent = txt;
-}
-
-// Start the game
+// start
 init();
 
 </script>
