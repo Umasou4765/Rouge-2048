@@ -1,3 +1,5 @@
+
+
 const SIZE = 4;
 const BEST_KEY = 'rogue2048_best_roguelike';
 
