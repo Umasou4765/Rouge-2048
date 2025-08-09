@@ -53,7 +53,8 @@ h1 { font-size:24px; margin:0; font-weight:700; letter-spacing:-0.5px; }
 }
 .tiles {
   position:absolute;
-  inset:var(--grid-padding);
+  /* 与 .grid 的 padding 使用同一变量，保证坐标对齐 */
+  inset:var(--cell-gap);
   display:block;
   pointer-events:none;
 }
