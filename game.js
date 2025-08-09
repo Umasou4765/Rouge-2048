@@ -1,4 +1,4 @@
-/* Rogue-2048 (Endless + Chance/Fate + Animated Tiles) */
+/* Rogue-2048 (Endless + Chance/Fate + Animated Tiles) + Cheat Hold */
 
 const SIZE = 4;
 const BEST_KEY = 'rogue2048_best_roguelike';
@@ -11,7 +11,7 @@ const MAX_STATIC_CLASS = 2048;
 const EVENT_FOR_POWERS_ONLY = false;
 
 const CHANCE_GOOD_RATIO = 0.8;
-
+const CHEAT_HOLD_MS = 10000; 
 let tiles = [];
 let nextTileId = 1;
 let grid = [];
@@ -44,6 +44,10 @@ bestEl.textContent = best;
 let tilesLayer;
 let bgCells = [];
 let cellPositions = null;
+
+// Cheat hold tracking
+let cheatTimerId = null;
+let cheatActive = false;
 
 function safeParseInt(v,f=0){ const n=parseInt(v,10); return isNaN(n)?f:n; }
 function debounce(fn, ms) {
@@ -696,6 +700,38 @@ function shuffleArray(a){
   }
 }
 
+function startCheatHold(e){
+  if (!gameOver) return;
+  if (cheatTimerId) clearTimeout(cheatTimerId);
+  cheatActive = true;
+  cheatTimerId = setTimeout(()=>{
+    if (cheatActive && gameOver){
+      cheatContinueGame();
+    }
+  }, CHEAT_HOLD_MS);
+  overlayTitle.classList.add('holding');
+}
+function cancelCheatHold(){
+  cheatActive = false;
+  if (cheatTimerId){
+    clearTimeout(cheatTimerId);
+    cheatTimerId = null;
+  }
+  overlayTitle.classList.remove('holding');
+}
+function cheatContinueGame(){
+  gameOver = false;
+  endgameOverlay.style.display='none';
+  enableInput();
+  saveState();
+  updateStatus('Cheat activated: continued.');
+}
+
+overlayTitle.addEventListener('pointerdown', startCheatHold);
+overlayTitle.addEventListener('pointerup', cancelCheatHold);
+overlayTitle.addEventListener('pointerleave', cancelCheatHold);
+overlayTitle.addEventListener('pointercancel', cancelCheatHold);
+
 document.getElementById('btnRestart').addEventListener('click',()=>{
   localStorage.removeItem(STATE_KEY);
   init();
@@ -706,5 +742,8 @@ document.getElementById('btnRestart2').addEventListener('click',()=>{
 });
 document.getElementById('btnCloseEvent').addEventListener('click',()=>closeEvent());
 
-createGridUI();
-init();
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  createGridUI();
+  init();
+});
