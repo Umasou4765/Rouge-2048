@@ -1,26 +1,14 @@
-/* Rogue-2048 Unified Logic
- * - Consolidated event system
- * - Configurable event trigger policy
- * - Blind mode, animations
- * - Deterministic or probabilistic event gating
- * - Cleaner fallback coloring
- */
-
 const SIZE = 4;
 const BEST_KEY = 'rogue2048_best_roguelike';
 
 // Configuration
 const EVENT_PROBABILITY = 1.0; // 1 = always trigger when policy criteria met
-// Modes:
-// 'eachMax': trigger once per new maximum tile value (like your probability version)
-// 'powerOfTwo': trigger each time you first reach a new power-of-two (2,4,8,...). Same as eachMax unless you add non-power values.
-// 'multipleOf8': trigger first time you reach each multiple-of-8 max (8,16,24,32,...)
-// 'everyIncrement': trigger any time max increases (even if you re-gain a previous max after losing it) - uses a history list
+// Modes: 'eachMax', 'powerOfTwo', 'multipleOf8', 'everyIncrement'
 const EVENT_TRIGGER_MODE = 'eachMax';
 const EVENT_COOLDOWN = 2; // min moves between events
-const ENABLE_WIN_CHECK = true;
-const MAX_STATIC_CLASS = 2048; // highest tile with predefined style class
-const EVENT_FOR_POWERS_ONLY = false; // if true, restrict triggers to powers of two
+const ENABLE_WIN_CHECK = false;  // Endless mode enabled (was true)
+const MAX_STATIC_CLASS = 2048;   // highest tile with predefined style class
+const EVENT_FOR_POWERS_ONLY = false;
 
 // State
 let grid = [];
@@ -171,7 +159,7 @@ function move(dir){
   spawnRandom();
   moves++;
   render(result.mergedPositions);
-  if (ENABLE_WIN_CHECK) checkWin();
+  if (ENABLE_WIN_CHECK) checkWin(); // skipped in endless
   checkEnd();
   maybeTriggerEvent();
 }
@@ -196,7 +184,8 @@ function checkEnd(){
 function checkWin(){
   for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++){
     if (grid[r][c] === 2048) {
-      endGame('You Win!', `Reached 2048 in ${moves} moves. Score: ${score}.`);
+      // In endless mode we just show a status note once.
+      updateStatus('2048 reached! Keep going...');
       return;
     }
   }
@@ -298,134 +287,149 @@ function maybeTriggerEvent(){
   const maxTile = getMaxTile();
 
   if (!eventShouldTrigger(maxTile)) return;
-
   if (Math.random() > EVENT_PROBABILITY) return; // probability gate
 
   lastEventMove = moves;
   showEvent(maxTile);
 }
 
-// ---------- Event System ----------
+// ---------- Event System (Chance / Fate) ----------
 function showEvent(triggerValue){
   isEventActive = true;
   disableInput();
   overlayTitleEvent.textContent = 'Event!';
-  overlayTextEvent.textContent = `Max tile ${triggerValue}. Pick an effect:`;
+  overlayTextEvent.textContent = `Max tile ${triggerValue}. Choose: Chance or Fate.`;
   eventOptionsEl.innerHTML = '';
 
-  const addTileEqualMax = {
-    text: 'Add a tile equal to current max',
-    action: () => {
-      const empties = collectEmpties();
-      if (empties.length){
-        const [r,c] = empties[(Math.random()*empties.length)|0];
-        grid[r][c] = getMaxTile();
+  // EFFECT DEFINITIONS (with reveal labels)
+  const effects = {
+    addTileEqualMax: {
+      text: 'Added a tile equal to current max.',
+      run: () => {
+        const empties = collectEmpties();
+        if (empties.length){
+          const [r,c] = empties[(Math.random()*empties.length)|0];
+          grid[r][c] = getMaxTile();
+        }
       }
-    }
-  };
-  const doubleSmallRank = {
-    text: 'Double all tiles of one random rank (2/4/8)',
-    action: () => {
-      const ranks = [2,4,8];
-      const chosen = ranks[(Math.random()*ranks.length)|0];
-      iterateTiles((v,r,c) => {
-        if (v === chosen) grid[r][c] = v*2;
-      });
-    }
-  };
-  const halveMax = {
-    text: 'Halve the maximum tile',
-    action: () => {
-      const m = getMaxTile();
-      iterateTiles((v,r,c)=> {
-        if (v===m) grid[r][c] = Math.max(1, Math.floor(v/2));
-      });
-    }
-  };
-  const halveSet = {
-    text: 'Halve all 4/8/16 tiles',
-    action: () => {
-      const set = new Set([4,8,16]);
-      iterateTiles((v,r,c) => {
-        if (set.has(v)) grid[r][c] = Math.max(1, Math.floor(v/2));
-      });
-    }
-  };
-  const shuffleAll = {
-    text: 'Shuffle everything',
-    action: () => shuffleGrid()
-  };
-  const blindFive = {
-    text: 'Blind mode (5 moves)',
-    action: () => {
-      blindMode = true;
-      blindModeMovesLeft = 5;
-      updateStatus('Blind mode: 5 moves.');
-    }
-  };
-  const allBecomeMax = {
-    text: 'All tiles become current max',
-    action: () => {
-      const m = getMaxTile();
-      iterateTiles((v,r,c) => { if (v!==0) grid[r][c] = m; });
-    }
-  };
-  const allBecomeMin = {
-    text: 'All tiles become the smallest non-zero',
-    action: () => {
-      const mn = getMinNonZero();
-      if (mn === 0) return;
-      iterateTiles((v,r,c) => { if (v!==0) grid[r][c] = mn; });
-    }
-  };
-  const spawn2048 = {
-    text: 'Spawn a 2048 tile (replace if full)',
-    action: () => {
-      const empties = collectEmpties();
-      if (empties.length){
-        const [r,c] = empties[(Math.random()*empties.length)|0];
-        grid[r][c] = 2048;
-      } else {
-        const all = collectAll();
-        const [r,c] = all[(Math.random()*all.length)|0];
-        grid[r][c] = 2048;
+    },
+    doubleSmallRank: {
+      text: 'Doubled all tiles of one small rank.',
+      run: () => {
+        const ranks = [2,4,8];
+        const chosen = ranks[(Math.random()*ranks.length)|0];
+        iterateTiles((v,r,c) => { if (v === chosen) grid[r][c] = v*2; });
       }
+    },
+    halveMax: {
+      text: 'Halved the maximum tile(s).',
+      run: () => {
+        const m = getMaxTile();
+        iterateTiles((v,r,c)=> { if (v===m) grid[r][c] = Math.max(1, Math.floor(v/2)); });
+      }
+    },
+    halveSet: {
+      text: 'Halved all 4/8/16 tiles.',
+      run: () => {
+        const set = new Set([4,8,16]);
+        iterateTiles((v,r,c) => { if (set.has(v)) grid[r][c] = Math.max(1, Math.floor(v/2)); });
+      }
+    },
+    shuffleAll: {
+      text: 'Shuffled the board.',
+      run: () => shuffleGrid()
+    },
+    blindFive: {
+      text: 'Blind mode for 5 moves.',
+      run: () => {
+        blindMode = true;
+        blindModeMovesLeft = 5;
+      }
+    },
+    allBecomeMax: {
+      text: 'All tiles became the current max.',
+      run: () => {
+        const m = getMaxTile();
+        iterateTiles((v,r,c) => { if (v!==0) grid[r][c] = m; });
+      }
+    },
+    allBecomeMin: {
+      text: 'All tiles became the smallest non-zero.',
+      run: () => {
+        const mn = getMinNonZero();
+        if (mn === 0) return;
+        iterateTiles((v,r,c) => { if (v!==0) grid[r][c] = mn; });
+      }
+    },
+    spawn2048: {
+      text: 'Spawned a 2048 tile.',
+      run: () => {
+        const empties = collectEmpties();
+        if (empties.length){
+          const [r,c] = empties[(Math.random()*empties.length)|0];
+          grid[r][c] = 2048;
+        } else {
+          const all = collectAll();
+            const [r,c] = all[(Math.random()*all.length)|0];
+            grid[r][c] = 2048;
+        }
+      }
+    },
+    randomFactor: {
+      text: 'Applied a random factor ×0.5/×2/×4.',
+      run: () => {
+        const factors = [0.5, 2, 4];
+        const f = factors[(Math.random()*factors.length)|0];
+        iterateTiles((v,r,c) => {
+          if (v!==0) grid[r][c] = Math.max(1, Math.floor(v * f));
+        });
+      }
+    },
+    nothing: {
+      text: 'Nothing happened.',
+      run: () => {}
     }
   };
-  const randomFactor = {
-    text: 'Random factor (×0.5 / ×2 / ×4)',
-    action: () => {
-      const factors = [0.5, 2, 4];
-      const f = factors[(Math.random()*factors.length)|0];
-      iterateTiles((v,r,c) => {
-        if (v!==0) grid[r][c] = Math.max(1, Math.floor(v * f));
-      });
+
+  // Pools:
+  const chancePool = [
+    effects.addTileEqualMax,
+    effects.doubleSmallRank,
+    effects.allBecomeMax,
+    effects.spawn2048
+  ];
+  const fatePool = [
+    effects.halveMax,
+    effects.halveSet,
+    effects.blindFive,
+    effects.randomFactor,
+    effects.shuffleAll,
+    effects.allBecomeMin,
+    effects.nothing
+  ];
+
+  function pickAndApply(pool, label){
+    const chosen = pool[(Math.random()*pool.length)|0];
+    chosen.run();
+    closeEvent();
+    render();
+    if (blindMode) {
+      updateStatus(`${label}: ${chosen.text} (Blind mode active)`);
+    } else {
+      updateStatus(`${label}: ${chosen.text}`);
     }
-  };
-  const nothing = { text: 'Nothing happens', action: () => {} };
+  }
 
-  // Categorize: good / bad / chaos choices
-  const goodPool = [addTileEqualMax, doubleSmallRank];
-  const badPool  = [halveMax, halveSet];
-  // Always randomize selection for "Good"/"Bad" to keep suspense
-  const good = goodPool[(Math.random()*goodPool.length)|0];
-  const bad  = badPool[(Math.random()*badPool.length)|0];
-  const chaos = [shuffleAll, blindFive, allBecomeMax, allBecomeMin, spawn2048, randomFactor, nothing];
-
-  function addOption(label, obj){
+  function addMysteryOption(label, desc, pool){
     const div = document.createElement('div');
     div.className = 'event-option';
-    div.innerHTML = `<strong>${label}</strong><br>${obj.text}`;
-    div.onclick = () => {
-      obj.action();
-      closeEvent();
-    };
+    div.innerHTML = `<strong>${label}</strong><div>${desc}</div>`;
+    div.onclick = () => pickAndApply(pool, label);
     eventOptionsEl.appendChild(div);
   }
 
-  addOption('Good', good);
-  addOption('Bad', bad);
-  chaos.forEach((ev,i) => addOption('Chaos ' + (i+1), ev));
+  addMysteryOption('Chance', 'A hopeful unknown boon.', chancePool);
+  addMysteryOption('Fate', 'Embrace destiny—good or harsh.', fatePool);
 
   eventOverlay.style.display = 'flex';
   setTimeout(() => {
