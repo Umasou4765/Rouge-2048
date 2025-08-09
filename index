@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Rogue-2048 原型（离线）</title>
+<style>
+  :root{
+    --bg:#f0f2f5; --cell:#cdc1b4; --empty:#eee4da;
+    --tile-2:#eee4da; --tile-4:#ede0c8; --tile-8:#f2b179; --tile-16:#f59563;
+    --tile-32:#f67c5f; --tile-64:#f65e3b; --tile-big:#edcf72;
+  }
+  body{font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial; background:var(--bg); margin:0; display:flex; justify-content:center; padding:24px;}
+  .container{width:420px;}
+  header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
+  h1{font-size:18px;margin:0;}
+  .stats{display:flex;gap:8px;}
+  .card{background:white;padding:8px 12px;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,0.08);font-size:13px;}
+  .board{background:#bbada0;padding:12px;border-radius:8px;position:relative;}
+  .grid{display:grid;grid-template-columns:repeat(4,80px);grid-gap:12px;}
+  .cell{width:80px;height:80px;border-radius:6px;background:var(--empty);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:22px;color:#776e65;position:relative;overflow:hidden;}
+  .tile{position:absolute; width:80px;height:80px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:22px;transition:transform 120ms ease, top 120ms ease, left 120ms ease;}
+  .controls{display:flex;gap:8px;margin-top:12px;}
+  button{padding:8px 10px;border-radius:6px;border:0;background:#2e7d32;color:white;cursor:pointer;}
+  button.ghost{background:#6d6d6d;}
+  .info{margin-top:8px;font-size:13px;color:#333;}
+  .bar{height:10px;background:#ddd;border-radius:6px;overflow:hidden;margin-top:6px;}
+  .hp{height:100%;background:#e53935;}
+  .enemyhp{height:100%;background:#8e24aa;}
+  .msg{margin-top:8px;font-size:14px;}
+  /* tile colors */
+  .t-2{background:var(--tile-2); color:#776e65;}
+  .t-4{background:var(--tile-4); color:#776e65;}
+  .t-8{background:var(--tile-8); color:white;}
+  .t-16{background:var(--tile-16); color:white;}
+  .t-32{background:var(--tile-32); color:white;}
+  .t-64{background:var(--tile-64); color:white;}
+  .t-128{background:var(--tile-big); color:white; font-size:20px;}
+  .t-256{background:#f2a541; color:white; font-size:20px;}
+  .t-512{background:#e27c3f; color:white; font-size:18px;}
+  .t-1024{background:#e05555; color:white; font-size:16px;}
+  .t-2048{background:#3c9; color:white; font-size:16px;}
+  .small{font-size:12px;}
+  .center{display:flex;justify-content:center;}
+</style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Rogue-2048（原型）</h1>
+      <div class="stats">
+        <div class="card">分数: <span id="score">0</span></div>
+        <div class="card">最高: <span id="best">0</span></div>
+      </div>
+    </header>
+
+    <div class="card" style="margin-bottom:12px;">
+      <div style="display:flex;gap:10px;align-items:center;">
+        <div>
+          玩家 HP: <strong id="playerHP">10</strong>
+          <div class="bar" style="width:140px;"><div id="playerHPbar" class="hp" style="width:100%"></div></div>
+        </div>
+        <div>
+          敌人 HP: <strong id="enemyHP">50</strong>
+          <div class="bar" style="width:140px;"><div id="enemyHPbar" class="enemyhp" style="width:100%"></div></div>
+        </div>
+      </div>
+      <div class="info small">说明：合并方块会对敌人造成伤害（合并值 ÷ 8）。每 5 步敌人攻击一次。</div>
+    </div>
+
+    <div class="board">
+      <div class="grid" id="grid">
+        <!-- 16 cells -->
+      </div>
+    </div>
+
+    <div class="controls">
+      <button id="btnRestart">重新开始</button>
+      <button id="btnUndo" class="ghost">撤销（1 步）</button>
+      <button id="btnHint" class="ghost">提示</button>
+    </div>
+
+    <div class="msg" id="message">用方向键移动（← ↑ → ↓）。</div>
+    <div class="center small">
+      <div style="margin-top:8px;">步数: <span id="moves">0</span></div>
+    </div>
+  </div>
+
+<script>
+/*
+  Rogue-2048 原型（简化实现）
+  - 4x4 2048 基础逻辑
+  - 合并时对敌人造成伤害（mergedValue / DAMAGE_DIV）
+  - 每 MOVE_TO_HIT 步敌人攻击玩家
+  - 简单的撤销（保存上一帧）
+*/
+
+const SIZE = 4;
+const DAMAGE_DIV = 8;      // 合并值 / DAMAGE_DIV = 对敌人造成的伤害（向下取整）
+const MOVE_TO_HIT = 5;     // 每多少步敌人攻击一次
+const PLAYER_MAX_HP = 10;
+const ENEMY_MAX_HP = 50;
+
+let grid = [];      // 2D array
+let tiles = [];     // 用于 DOM tile
+let score = 0;
+let best = parseInt(localStorage.getItem('rogue2048_best') || '0');
+let playerHP = PLAYER_MAX_HP;
+let enemyHP = ENEMY_MAX_HP;
+let moves = 0;
+let lastState = null; // 用于撤销（保存简单状态）
+
+// DOM
+const gridEl = document.getElementById('grid');
+const scoreEl = document.getElementById('score');
+const bestEl = document.getElementById('best');
+const playerHPEl = document.getElementById('playerHP');
+const enemyHPEl = document.getElementById('enemyHP');
+const playerBar = document.getElementById('playerHPbar');
+const enemyBar = document.getElementById('enemyHPbar');
+const messageEl = document.getElementById('message');
+const movesEl = document.getElementById('moves');
+
+bestEl.textContent = best;
+
+// 初始化 DOM cells
+for (let i=0;i<SIZE*SIZE;i++){
+  const div = document.createElement('div');
+  div.className = 'cell';
+  gridEl.appendChild(div);
+}
+
+// 游戏初始化
+function init(){
+  grid = Array.from({length:SIZE}, ()=>Array(SIZE).fill(0));
+  score = 0;
+  playerHP = PLAYER_MAX_HP;
+  enemyHP = ENEMY_MAX_HP;
+  moves = 0;
+  lastState = null;
+  spawnRandom();
+  spawnRandom();
+  render();
+  setMessage('用方向键移动（← ↑ → ↓）。合并造成伤害，注意 HP！');
+}
+
+// 生成随机 2 或 4
+function spawnRandom(){
+  const empties = [];
+  for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (grid[r][c]===0) empties.push([r,c]);
+  if (!empties.length) return false;
+  const [r,c] = empties[Math.floor(Math.random()*empties.length)];
+  grid[r][c] = Math.random() < 0.9 ? 2 : 4;
+  return true;
+}
+
+// 渲染
+function render(){
+  // 清理 tile（移除以前的绝对定位 tile，只用 cell 文本渲染）
+  const cells = document.querySelectorAll('.cell');
+  cells.forEach((cell,i)=>{
+    const r = Math.floor(i/SIZE), c = i%SIZE;
+    const v = grid[r][c];
+    cell.textContent = v===0 ? '' : v;
+    // set style class
+    cell.className = 'cell' + (v ? ' t-' + v : '');
+  });
+
+  scoreEl.textContent = score;
+  playerHPEl.textContent = playerHP;
+  enemyHPEl.textContent = enemyHP;
+  bestEl.textContent = best;
+  movesEl.textContent = moves;
+  playerBar.style.width = Math.max(0,(playerHP/PLAYER_MAX_HP)*100) + '%';
+  enemyBar.style.width = Math.max(0,(enemyHP/ENEMY_MAX_HP)*100) + '%';
+}
+
+// 深拷贝状态（用于撤销）
+function copyState(){
+  return {
+    grid: grid.map(row=>row.slice()),
+    score, playerHP, enemyHP, moves
+  };
+}
+
+// 恢复状态
+function restoreState(s){
+  grid = s.grid.map(row=>row.slice());
+  score = s.score;
+  playerHP = s.playerHP;
+  enemyHP = s.enemyHP;
+  moves = s.moves;
+  render();
+}
+
+// 检查是否还能移动
+function canMove(){
+  // 空格存在
+  for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (grid[r][c]===0) return true;
+  // 相邻合并存在
+  for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++){
+    const v = grid[r][c];
+    if (r+1<SIZE && grid[r+1][c]===v) return true;
+    if (c+1<SIZE && grid[r][c+1]===v) return true;
+  }
+  return false;
+}
+
+// 移动（0:left,1:up,2:right,3:down）
+function move(dir){
+  // 保存撤销
+  lastState = copyState();
+
+  let moved = false;
+  let damageThisMove = 0; // 累积对敌人的伤害
+  // 统一把移动转为“左移”逻辑，通过旋转 grid
+  function rotate90(g){ // 90度顺时针
+    const n = g.length;
+    const ng = Array.from({length:n}, ()=>Array(n).fill(0));
+    for (let i=0;i<n;i++) for (let j=0;j<n;j++) ng[j][n-1-i] = g[i][j];
+    return ng;
+  }
+  let times = 0;
+  if (dir === 0) times = 0; // left
+  if (dir === 1) times = 1; // up -> rotate 90
+  if (dir === 2) times = 2; // right
+  if (dir === 3) times = 3; // down -> rotate 270
+  let g = grid.map(r=>r.slice());
+  for (let t=0;t<times;t++) g = rotate90(g);
+
+  // left compress+merge per row
+  for (let r=0;r<SIZE;r++){
+    let row = g[r].filter(v=>v!==0);
+    for (let i=0;i<row.length-1;i++){
+      if (row[i] === row[i+1]){
+        const merged = row[i]*2;
+        row[i] = merged;
+        row.splice(i+1,1);
+        score += merged;
+        damageThisMove += Math.floor(merged / DAMAGE_DIV);
+        // mark moved
+      }
+    }
+    while (row.length < SIZE) row.push(0);
+    // check moved
+    for (let c=0;c<SIZE;c++){
+      if (g[r][c] !== row[c]) moved = true;
+      g[r][c] = row[c];
+    }
+  }
+
+  // rotate back
+  for (let t=0;t<(4-times)%4;t++) g = rotate90(g);
+
+  if (!moved) {
+    setMessage('没有移动发生。换个方向试试。');
+    return;
+  }
+
+  grid = g.map(r=>r.slice());
+  // 造成伤害
+  if (damageThisMove>0){
+    enemyHP -= damageThisMove;
+    setMessage('你造成了 ' + damageThisMove + ' 点伤害！');
+  } else {
+    setMessage('移动成功，但没有合并（无伤害）。');
+  }
+  // 更新最高分
+  if (score > best){ best = score; localStorage.setItem('rogue2048_best', best); }
+  // spawn
+  spawnRandom();
+  moves++;
+  // 敌人攻击节奏
+  if (moves % MOVE_TO_HIT === 0){
+    enemyAttack();
+  }
+  render();
+  checkEnd();
+}
+
+// 敌人攻击
+function enemyAttack(){
+  const dmg = Math.max(1, Math.floor( (1 + Math.log1p(moves))/1 )); // 简单随步数增长
+  playerHP -= dmg;
+  setMessage('敌人发动攻击，造成 ' + dmg + ' 点伤害！');
+}
+
+// 检查胜负
+function checkEnd(){
+  if (enemyHP <= 0){
+    setMessage('你战胜了敌人！胜利！（可重开新局）');
+    // 奖励：加分
+    score += enemyHP<=0 ? 100 : 0;
+    if (score > best){ best = score; localStorage.setItem('rogue2048_best', best); }
+    render();
+    // 暂停按键（简化：移除事件监听）
+    // 但保留重启和撤销
+    return;
+  }
+  if (playerHP <= 0){
+    setMessage('你被敌人击败了，Game Over。按“重新开始”再试一次。');
+    render();
+    return;
+  }
+  if (!canMove()){
+    setMessage('没有可行动作，游戏结束（平局/失败）。');
+    return;
+  }
+}
+
+// 按键事件
+window.addEventListener('keydown', (e)=>{
+  if (['ArrowLeft','ArrowUp','ArrowRight','ArrowDown'].includes(e.key)){
+    e.preventDefault();
+    const map = {ArrowLeft:0, ArrowUp:1, ArrowRight:2, ArrowDown:3};
+    move(map[e.key]);
+  }
+});
+
+// 控件
+document.getElementById('btnRestart').addEventListener('click', ()=>init());
+document.getElementById('btnUndo').addEventListener('click', ()=>{
+  if (lastState){ restoreState(lastState); lastState = null; setMessage('已撤销一步。'); }
+  else setMessage('没有可撤销的步。');
+});
+document.getElementById('btnHint').addEventListener('click', ()=>{
+  setMessage('提示：优先合并更高的方块，尽量留下一侧空位以方便移动。');
+});
+
+// 小提示显示
+function setMessage(txt){
+  messageEl.textContent = txt;
+}
+
+// 启动
+init();
+
+</script>
+</body>
+</html>
