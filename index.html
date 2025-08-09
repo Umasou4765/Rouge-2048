@@ -1,67 +1,83 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Rogue-2048</title>
+<title>Rogue-2048 — Roguelike Mode</title>
 <style>
   :root{
-    --bg:#f6f7fb; --panel:#ffffff; --muted:#9aa0a6;
-    --board:#bbaaa0; --cell-empty:#ede6dd;
-    --accent:#2e7d32; --accent-2:#3a77ff;
+    --bg-start: #e0f7fa;
+    --bg-end: #f5fcfd;
+    --panel: #ffffff;
+    --muted: #607d8b;
+    --board: #b2ebf2;
+    --cell-empty: #e0f2f1;
+    --accent: #00bcd4;
+    --accent-2: #3f51b5;
+    --radius: 12px;
   }
   *{box-sizing:border-box}
+  html,body{height:100%;}
   body{
-    margin:0; font-family:Inter, "Segoe UI", Roboto, Arial; background:linear-gradient(180deg,#f8fafc,#f1f4f8); display:flex; justify-content:center; padding:28px;
+    margin:0; font-family: 'Poppins', sans-serif, "Segoe UI", Roboto, Arial;
+    background:linear-gradient(180deg,var(--bg-start),var(--bg-end));
+    display:flex; justify-content:center; align-items:flex-start; padding:30px;
+    -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    overscroll-behavior-y: none;
+    font-weight: 500;
   }
-
   .container{width:460px; max-width:95%;}
-
-  header{display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;}
-  h1{font-size:18px;margin:0;color:#222;}
+  header{display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;}
+  h1{font-size:24px;margin:0;color:#212121; font-weight:700; letter-spacing: -0.5px;}
   .stats{display:flex; gap:8px; align-items:center;}
-  .card{background:var(--panel); padding:8px 12px; border-radius:10px; box-shadow:0 4px 14px rgba(18,24,34,0.06); font-size:13px; color:#111; min-width:86px; text-align:center;}
-
-  .board{background:var(--board); padding:12px; border-radius:12px; display:flex; justify-content:center; box-shadow:0 6px 18px rgba(17,24,39,0.06);}
-  .grid{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; width:100%; max-width:380px; padding:6px;}
-  .cell{aspect-ratio:1/1; border-radius:10px; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:26px; color:#645b51; background:var(--cell-empty); box-shadow: inset 0 -2px 0 rgba(0,0,0,0.03); user-select:none;}
-  /* tile colors (simple) */
+  .card{background:var(--panel); padding:8px 16px; border-radius:12px;
+    box-shadow:0 8px 24px rgba(17,24,39,0.06); font-size:14px; color:#424242; min-width:90px; text-align:center; font-weight:600;}
+  .board{background:var(--board); padding:16px; border-radius:20px; display:flex; justify-content:center;
+          box-shadow:0 12px 40px rgba(17,24,39,0.08);}
+  .grid{display:grid; grid-template-columns:repeat(4,1fr); gap:16px; width:100%; max-width:400px; padding:8px;}
+  .cell{aspect-ratio:1/1; border-radius:12px; display:flex; align-items:center; justify-content:center;
+    font-weight:800; font-size:30px; color:#424242; background:var(--cell-empty); user-select:none;
+    transition: all 0.2s ease;
+    transform: scale(1);
+    box-shadow: inset 0 -3px 0 rgba(0,0,0,0.04), 0 2px 4px rgba(0,0,0,0.02);}
+  .cell.merged{animation:pop 0.1s ease-in-out;}
+  @keyframes pop {
+    0% {transform: scale(1);}
+    50% {transform: scale(1.1);}
+    100% {transform: scale(1);}
+  }
   .t-2{background:#eee4da; color:#776e65;}
   .t-4{background:#ede0c8; color:#776e65;}
   .t-8{background:#f2b179; color:#fff;}
   .t-16{background:#f59563; color:#fff;}
   .t-32{background:#f67c5f; color:#fff;}
   .t-64{background:#f65e3b; color:#fff;}
-  .t-128{background:#edcf72; color:#fff; font-size:20px;}
-  .t-256{background:#f2a541; color:#fff; font-size:20px;}
-  .t-512{background:#e27c3f; color:#fff; font-size:18px;}
-  .t-1024{background:#e05555; color:#fff; font-size:16px;}
-  .t-2048{background:#3ccf9e; color:#fff; font-size:16px;}
-  .t-large{font-size:18px;}
-
-  .controls{display:flex; gap:8px; margin-top:12px;}
-  button{padding:10px 12px; border-radius:10px; border:0; cursor:pointer; font-weight:600;}
-  #btnRestart{background:#3a77ff; color:white; flex:1;}
-  #btnUndo{background:#e6eef5; color:#174b8a; flex:1;}
-
-  .meta-row{display:flex; justify-content:space-between; align-items:center; margin-top:10px; color:var(--muted); font-size:13px;}
-  .small{font-size:12px; color:var(--muted);}
-
-  /* overlays */
+  .t-128{background:#edcf72; color:#fff; font-size:24px;}
+  .t-256{background:#edcc61; color:#fff; font-size:24px;}
+  .t-512{background:#edc850; color:#fff; font-size:20px;}
+  .t-1024{background:#edc53f; color:#fff; font-size:18px;}
+  .t-2048{background:#edc22e; color:#fff; font-size:18px;}
+  .t-large{font-size:20px;}
+  .controls{display:flex; gap:10px; margin-top:16px;}
+  button{padding:12px 16px; border-radius:12px; border:0; cursor:pointer; font-weight:700; font-size:15px; transition: transform 0.1s ease, box-shadow 0.1s ease;}
+  button:active{transform: translateY(2px); box-shadow: none;}
+  #btnRestart{background:var(--accent-2); color:white; flex:1; box-shadow:0 4px 12px rgba(63,81,181,0.3);}
+  #btnUndo{background:#f2faf7; color:#3f51b5; flex:1; border:1px solid #e0e0e0; box-shadow:0 4px 12px rgba(0,0,0,0.05);}
   .overlay{
-    position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(2,6,23,0.45); z-index:50;
+    position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,0.4); z-index:50;
+    backdrop-filter: blur(5px);
   }
-  .panel{background:var(--panel); padding:18px; border-radius:12px; min-width:320px; max-width:92%; box-shadow:0 12px 40px rgba(2,6,23,0.18); text-align:center;}
-  .panel h2{margin:0; font-size:18px;}
-  .panel p{margin:8px 0 0; color:var(--muted); font-size:14px;}
-  .event-options{display:flex; flex-direction:column; gap:10px; margin-top:14px;}
-  .event-option{background:#fbfdff; padding:12px; border-radius:10px; border:1px solid #eef3ff; text-align:left; cursor:pointer; transition:transform .08s ease;}
-  .event-option:hover{transform:translateY(-3px); box-shadow:0 8px 20px rgba(46,77,255,0.08);}
-
-  /* responsive */
+  .panel{background:var(--panel); padding:24px; border-radius:16px; min-width:340px; max-width:92%; box-shadow:0 18px 60px rgba(0,0,0,0.15); text-align:center;}
+  .panel h2{margin:0; font-size:24px; font-weight:700; color:#212121;}
+  .panel p{margin:10px 0 0; color:var(--muted); font-size:15px;}
+  .event-options{display:flex; flex-direction:column; gap:12px; margin-top:20px;}
+  .event-option{background:#f8f9fa; padding:16px; border-radius:12px; border:1px solid #e9ecef; text-align:left; cursor:pointer; transition:transform .1s ease, box-shadow .1s ease; user-select:none;}
+  .event-option:hover{transform:translateY(-3px); box-shadow:0 12px 30px rgba(63,81,181,0.08);}
+  .event-option strong{color:#3f51b5; font-size:16px;}
+  .event-option div{margin-top:4px; font-size:13px; color:#607d8b;}
   @media (max-width:420px){
-    .grid{gap:8px;}
-    .cell{font-size:22px;}
+    .grid{gap:12px;}
+    .cell{font-size:26px;}
   }
 </style>
 </head>
@@ -74,44 +90,31 @@
         <div class="card">Best<br><strong id="best">0</strong></div>
       </div>
     </header>
-
     <div class="board" id="board">
       <div class="grid" id="grid"></div>
     </div>
-
     <div class="controls">
       <button id="btnRestart">Restart</button>
       <button id="btnUndo">Undo</button>
     </div>
-
-    <div class="meta-row">
-      <div class="small">Moves: <strong id="moves">0</strong></div>
-      <div class="small">Highest: <strong id="highest">0</strong></div>
-    </div>
   </div>
-
-  <!-- Endgame overlay -->
   <div class="overlay" id="endgameOverlay">
     <div class="panel">
       <h2 id="overlayTitle">Game Over</h2>
       <p id="overlayText">You scored X points in Y moves.</p>
-      <div style="margin-top:14px;">
-        <button id="overlayRestart" style="background:#3a77ff;color:#fff;padding:10px 12px;border-radius:10px;border:0;cursor:pointer;">Restart</button>
+      <div style="margin-top:20px;">
+        <button id="overlayRestart" style="background:var(--accent-2);color:#fff;padding:12px 16px;border-radius:12px;border:0;cursor:pointer;font-weight:700;">Restart</button>
       </div>
     </div>
   </div>
-
-  <!-- Event overlay -->
   <div class="overlay" id="eventOverlay">
     <div class="panel">
-      <h2>Event Triggered</h2>
+      <h2 id="eventTitle">Event Triggered</h2>
       <p id="eventMessage">Your highest tile reached <strong id="eventTriggerValue">X</strong>. Choose one:</p>
       <div class="event-options" id="eventOptions"></div>
     </div>
   </div>
-
 <script>
-/* --- Config & State --- */
 const SIZE = 4;
 let grid = [];
 let score = 0;
@@ -120,24 +123,19 @@ let moves = 0;
 let lastState = null;
 let gameOver = false;
 let isEventActive = false;
-let triggeredMultiples = new Set(); // record which multiples of 8 have been used
-
-/* --- DOM --- */
+let triggeredMultiples = new Set();
+const IS_TOUCH = ('ontouchstart' in window) || (navigator.maxTouchPoints && navigator.maxTouchPoints > 0);
 const gridEl = document.getElementById('grid');
 const scoreEl = document.getElementById('score');
 const bestEl = document.getElementById('best');
-const movesEl = document.getElementById('moves');
-const highestEl = document.getElementById('highest');
 const endgameOverlay = document.getElementById('endgameOverlay');
 const eventOverlay = document.getElementById('eventOverlay');
 const overlayTitle = document.getElementById('overlayTitle');
 const overlayText = document.getElementById('overlayText');
 const eventOptionsEl = document.getElementById('eventOptions');
 const eventTriggerValueEl = document.getElementById('eventTriggerValue');
-
+const eventTitle = document.getElementById('eventTitle');
 bestEl.textContent = best;
-
-/* --- Helpers: UI --- */
 function createGridUI(){
   gridEl.innerHTML = '';
   for (let i=0;i<SIZE*SIZE;i++){
@@ -154,23 +152,16 @@ function render(){
     const v = grid[r][c];
     cell.textContent = v === 0 ? '' : v;
     cell.className = 'cell' + (v ? ' t-' + v : '');
-    // add large class if big
     if (v >= 1024) cell.classList.add('t-large');
     if (v > maxV) maxV = v;
   });
   scoreEl.textContent = score;
   bestEl.textContent = best;
-  movesEl.textContent = moves;
-  highestEl.textContent = maxV;
-
-  // event trigger: whenever maxV >= 8 and is multiple of 8, and not yet triggered
   if (!isEventActive && maxV >= 8 && maxV % 8 === 0 && !triggeredMultiples.has(maxV)){
     triggeredMultiples.add(maxV);
     showEvent(maxV);
   }
 }
-
-/* --- Game Init & Random Spawns --- */
 function init(){
   createGridUI();
   grid = Array.from({length:SIZE}, ()=>Array(SIZE).fill(0));
@@ -181,7 +172,6 @@ function init(){
   hideOverlays();
   enableInput();
 }
-
 function spawnRandom(){
   const empties = [];
   for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (grid[r][c] === 0) empties.push([r,c]);
@@ -190,8 +180,6 @@ function spawnRandom(){
   grid[r][c] = Math.random() < 0.9 ? 2 : 4;
   return true;
 }
-
-/* --- State copy / restore for Undo --- */
 function copyState(){
   return {
     grid: grid.map(row=>row.slice()),
@@ -204,12 +192,8 @@ function restoreState(s){
   moves = s.moves;
   render();
 }
-
-/* --- Movement helpers (explicit, no rotation confusion) --- */
 function cloneGrid(g){ return g.map(r=>r.slice()); }
-
 function moveLeftProcess(g){
-  // returns {newGrid, moved, gained}
   let moved = false;
   let gained = 0;
   const ng = g.map(row => {
@@ -220,7 +204,7 @@ function moveLeftProcess(g){
         const merged = filtered[i]*2;
         newRow.push(merged);
         gained += merged;
-        i++; // skip next
+        i++;
       } else {
         newRow.push(filtered[i]);
       }
@@ -228,11 +212,9 @@ function moveLeftProcess(g){
     while (newRow.length < SIZE) newRow.push(0);
     return newRow;
   });
-  // detect movement
   for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (ng[r][c] !== g[r][c]) moved = true;
   return {newGrid:ng, moved, gained};
 }
-
 function transpose(g){
   const ng = Array.from({length:SIZE}, ()=>Array(SIZE).fill(0));
   for (let i=0;i<SIZE;i++) for (let j=0;j<SIZE;j++) ng[i][j] = g[j][i];
@@ -241,37 +223,32 @@ function transpose(g){
 function reverseRows(g){
   return g.map(row => row.slice().reverse());
 }
-
-function move(dir){ // 0: left, 1: up, 2: right, 3: down
+function move(dir){
   if (gameOver || isEventActive) return;
   lastState = copyState();
-
   let g = cloneGrid(grid);
   let result;
-  if (dir === 0){ // left
+  if (dir === 0){
     result = moveLeftProcess(g);
     g = result.newGrid;
-  } else if (dir === 1){ // up -> transpose, left, transpose
+  } else if (dir === 1){
     g = transpose(g);
     result = moveLeftProcess(g);
     g = transpose(result.newGrid);
-  } else if (dir === 2){ // right -> reverse rows, left, reverse
+  } else if (dir === 2){
     g = reverseRows(g);
     result = moveLeftProcess(g);
     g = reverseRows(result.newGrid);
-  } else if (dir === 3){ // down -> transpose, reverse, left, reverse, transpose
+  } else if (dir === 3){
     g = transpose(g);
     g = reverseRows(g);
     result = moveLeftProcess(g);
     g = reverseRows(result.newGrid);
     g = transpose(g);
   }
-
   if (!result || !result.moved){
-    // no move
     return;
   }
-
   grid = g.map(r=>r.slice());
   score += result.gained;
   if (score > best){ best = score; localStorage.setItem('rogue2048_best_roguelike', best); }
@@ -280,8 +257,6 @@ function move(dir){ // 0: left, 1: up, 2: right, 3: down
   render();
   checkEnd();
 }
-
-/* --- End condition --- */
 function canMove(){
   for (let r=0;r<SIZE;r++){
     for (let c=0;c<SIZE;c++){
@@ -305,21 +280,19 @@ function endGame(title,text){
   overlayText.textContent = text + ` (Best: ${best})`;
   endgameOverlay.style.display = 'flex';
 }
-
-/* --- Event system: any multiple of 8 (≥8) --- */
 function showEvent(triggerValue){
   isEventActive = true;
   disableInput();
   eventTriggerValueEl.textContent = triggerValue;
   eventOptionsEl.innerHTML = '';
-
-  const options = getRandomEventOptions(triggerValue);
+  eventTitle.textContent = `Event — ${triggerValue}`;
+  const options = getThreeEventOptions(triggerValue);
   options.forEach((opt) => {
     const div = document.createElement('div');
     div.className = 'event-option';
-    div.innerHTML = `<strong>${opt.title}</strong><div style="margin-top:6px;font-size:13px;color:#6b7280;">${opt.description}</div>`;
+    div.innerHTML = `<strong>${opt.title}</strong><div>${opt.description}</div>`;
     div.addEventListener('click', () => {
-      applyEventEffect(opt.effect);
+      opt.effect(grid);
       hideOverlays();
       isEventActive = false;
       enableInput();
@@ -327,33 +300,41 @@ function showEvent(triggerValue){
     });
     eventOptionsEl.appendChild(div);
   });
-
   eventOverlay.style.display = 'flex';
 }
-
-function getRandomEventOptions(triggerValue){
-  // keep effects safe and integer
+function getThreeEventOptions(triggerValue){
   const tv = Math.max(8, Math.floor(triggerValue));
-  const half = Math.max(2, tv / 2);
-  const effects = [
-    { title: "Divine Favor", description: `Spawn a ${tv * 2} tile on the board.`, effect: (g) => spawnSpecific(g, tv * 2) },
-    { title: "Power Surge", description: "Upgrade all 2 tiles to 4s.", effect: (g) => upgradeTiles(g, 2, 4) },
-    { title: "Cleansing Wave", description: `Clear all tiles smaller than ${Math.floor(half)}.`, effect: (g) => removeTilesBelow(g, Math.floor(half)) },
-    { title: "Score Boost", description: `Gain an extra ${tv * 10} points.`, effect: (g) => { score += tv * 10; } },
-    { title: "Dark Omen", description: `Spawn a ${Math.max(2, Math.floor(half))} tile on the board.`, effect: (g) => spawnSpecific(g, Math.max(2, Math.floor(half))) },
-    { title: "Chaos Shuffle", description: "Randomly shuffle all tiles on the board.", effect: (g) => shuffleGrid(g) },
-    { title: "Tile Split", description: `Split one ${tv} tile into two ${Math.floor(half)} tiles.`, effect: (g) => splitMaxTile(g, tv) },
+  const half = Math.max(2, Math.floor(tv/2));
+  const goodVariants = [
+    { title: "Divine Favor", description: `Spawn a ${tv*2} in an empty spot.`, effect: (g)=> spawnSpecific(g, tv*2) },
+    { title: "Power Surge", description: `Upgrade all 2 tiles to 4.`, effect: (g)=> upgradeTiles(g, 2, 4) },
+    { title: "Cleansing Wave", description: `Remove all tiles with a value less than ${half}.`, effect: (g)=> removeTilesBelow(g, half) },
   ];
-  // pick 3 random unique options
-  const shuffled = effects.sort(()=>0.5 - Math.random());
-  return shuffled.slice(0,3);
+  const badVariants = [
+    { title: "Dark Omen", description: `Spawn a ${Math.max(2, Math.floor(half))} in a random empty spot.`, effect: (g)=> spawnSpecific(g, Math.max(2, Math.floor(half))) },
+    { title: "Heavy Block", description: `Spawn a 4 tile near the center.`, effect: (g)=> spawnSpecificNearCenter(g, 4) },
+    { title: "Obscure", description: `Spawn two 2 tiles in random empty spots.`, effect: (g)=> { spawnSpecific(g,2); spawnSpecific(g,2); } },
+  ];
+  const chaoticVariants = [
+    { title: "Chaos Shuffle", description: `Randomly rearrange all tiles.`, effect: (g)=> shuffleGrid(g) },
+    { title: "Tile Split", description: `Split the highest value tile into two smaller ones.`, effect: (g)=> splitMaxTile(g, tv) },
+    { title: "???", description: `A random effect from the above options.`, effect: (g)=> {
+        const pool = [ (gg)=>shuffleGrid(gg), (gg)=>splitMaxTile(gg,tv), (gg)=>spawnSpecific(gg, Math.max(2, Math.floor(tv/2))) ];
+        const fn = pool[Math.floor(Math.random()*pool.length)];
+        fn(g);
+      }
+    },
+  ];
+  const pick = arr => arr[Math.floor(Math.random()*arr.length)];
+  return [
+    pick(goodVariants),
+    pick(badVariants),
+    pick(chaoticVariants),
+  ];
 }
-
 function applyEventEffect(effect){
   effect(grid);
 }
-
-/* --- Event effect helpers --- */
 function spawnSpecific(g, value){
   const empties = [];
   for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (g[r][c]===0) empties.push([r,c]);
@@ -361,6 +342,16 @@ function spawnSpecific(g, value){
   const [r,c] = empties[Math.floor(Math.random()*empties.length)];
   g[r][c] = Math.max(2, Math.floor(value));
   return true;
+}
+function spawnSpecificNearCenter(g, value){
+  const centerCells = [[1,1],[1,2],[2,1],[2,2]];
+  const empties = centerCells.filter(([r,c])=> g[r][c]===0);
+  if (empties.length){
+    const [r,c] = empties[Math.floor(Math.random()*empties.length)];
+    g[r][c] = Math.max(2, Math.floor(value));
+    return true;
+  }
+  return spawnSpecific(g, value);
 }
 function upgradeTiles(g, from, to){
   for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (g[r][c] === from) g[r][c] = to;
@@ -374,7 +365,6 @@ function shuffleGrid(g){
   for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) g[r][c] = flat[k++];
 }
 function splitMaxTile(g, value){
-  // find a tile equal to value; if none, find highest and split it
   let max = 0; let pos = null;
   for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) {
     if (g[r][c] > max) { max = g[r][c]; pos = [r,c]; }
@@ -391,8 +381,6 @@ function splitMaxTile(g, value){
   }
   return true;
 }
-
-/* --- overlays & input --- */
 function hideOverlays(){
   endgameOverlay.style.display = 'none';
   eventOverlay.style.display = 'none';
@@ -405,46 +393,50 @@ document.getElementById('btnUndo').addEventListener('click', ()=>{
     lastState = null;
   }
 });
-
-/* keyboard */
+let inputEnabled = false;
 function handleKey(e){
   if (isEventActive) return;
   const key = e.key;
-  if (['ArrowLeft','ArrowUp','ArrowRight','ArrowDown'].includes(key)){
+  const map = {ArrowLeft:0, ArrowUp:1, ArrowRight:2, ArrowDown:3};
+  if (key in map){
     e.preventDefault();
-    const map = {ArrowLeft:0, ArrowUp:1, ArrowRight:2, ArrowDown:3};
     move(map[key]);
   }
 }
-function enableInput(){ window.addEventListener('keydown', handleKey); }
-function disableInput(){ window.removeEventListener('keydown', handleKey); }
-
-/* simple swipe support for mobile (optional) */
-(function addSwipe(){
-  let startX = 0, startY = 0;
-  const threshold = 20;
-  window.addEventListener('touchstart', (e)=>{
-    if (isEventActive) return;
-    const t = e.touches[0];
-    startX = t.clientX; startY = t.clientY;
-  }, {passive:true});
-  window.addEventListener('touchend', (e)=>{
-    if (isEventActive) return;
-    const t = (e.changedTouches && e.changedTouches[0]) || {};
-    const dx = t.clientX - startX;
-    const dy = t.clientY - startY;
-    if (Math.abs(dx) < threshold && Math.abs(dy) < threshold) return;
-    if (Math.abs(dx) > Math.abs(dy)){
-      if (dx > 0) move(2); else move(0);
-    } else {
-      if (dy > 0) move(3); else move(1);
-    }
-  }, {passive:true});
-})();
-
-/* --- Start --- */
+function enableInput(){
+  if (inputEnabled) return;
+  window.addEventListener('keydown', handleKey);
+  inputEnabled = true;
+}
+function disableInput(){
+  if (!inputEnabled) return;
+  window.removeEventListener('keydown', handleKey);
+  inputEnabled = false;
+}
+if (IS_TOUCH){
+  (function addSwipe(){
+    let startX = 0, startY = 0;
+    const threshold = 20;
+    window.addEventListener('touchstart', (e)=>{
+      if (isEventActive) return;
+      const t = e.touches[0];
+      startX = t.clientX; startY = t.clientY;
+    }, {passive:true});
+    window.addEventListener('touchend', (e)=>{
+      if (isEventActive) return;
+      const t = (e.changedTouches && e.changedTouches[0]) || {};
+      const dx = t.clientX - startX;
+      const dy = t.clientY - startY;
+      if (Math.abs(dx) < threshold && Math.abs(dy) < threshold) return;
+      if (Math.abs(dx) > Math.abs(dy)){
+        if (dx > 0) move(2); else move(0);
+      } else {
+        if (dy > 0) move(3); else move(1);
+      }
+    }, {passive:true});
+  })();
+}
 init();
 </script>
 </body>
 </html>
-
