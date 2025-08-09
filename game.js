@@ -2,11 +2,11 @@
 
 const SIZE = 4;
 const BEST_KEY = 'rogue2048_best_roguelike';
+const STATE_KEY = 'rogue2048_state_roguelike';
 
 const EVENT_PROBABILITY = 1.0;
 const EVENT_TRIGGER_MODE = 'eachMax';
 const EVENT_COOLDOWN = 2;
-const ENABLE_WIN_CHECK = false;
 const MAX_STATIC_CLASS = 2048;
 const EVENT_FOR_POWERS_ONLY = false;
 
@@ -46,6 +46,13 @@ let bgCells = [];
 let cellPositions = null;
 
 function safeParseInt(v,f=0){ const n=parseInt(v,10); return isNaN(n)?f:n; }
+function debounce(fn, ms) {
+  let timeout;
+  return function(...args) {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => fn.apply(this, args), ms);
+  };
+}
 
 function createGridUI(){
   gridEl.innerHTML = '';
@@ -80,22 +87,58 @@ function computeCellPositions(){
 }
 
 function init(){
-  tiles = [];
-  nextTileId = 1;
-  score = 0; moves = 0;
-  gameOver = false;
-  isEventActive = false;
-  blindMode = false; blindModeMovesLeft = 0;
-  triggeredSet.clear();
-  triggeredHistory = [];
-  lastMaxValue = 0;
-  lastEventMove = -999;
-  spawnRandom(); spawnRandom();
+  const savedState = localStorage.getItem(STATE_KEY);
+  if (savedState) {
+    const state = JSON.parse(savedState);
+    tiles = state.tiles;
+    nextTileId = state.nextTileId;
+    score = state.score;
+    moves = state.moves;
+    isEventActive = state.isEventActive;
+    blindMode = state.blindMode;
+    blindModeMovesLeft = state.blindModeMovesLeft;
+    lastEventMove = state.lastEventMove;
+    triggeredHistory = state.triggeredHistory;
+    triggeredSet = new Set(state.triggeredSet);
+    lastMaxValue = state.lastMaxValue;
+    gameOver = false;
+    updateStatus('Game loaded.');
+  } else {
+    tiles = [];
+    nextTileId = 1;
+    score = 0; moves = 0;
+    gameOver = false;
+    isEventActive = false;
+    blindMode = false; blindModeMovesLeft = 0;
+    triggeredSet.clear();
+    triggeredHistory = [];
+    lastMaxValue = 0;
+    lastEventMove = -999;
+    spawnRandom(); spawnRandom();
+    updateStatus('New game started.');
+  }
+  
   syncGrid();
   hideOverlays();
   enableInput();
-  updateStatus('');
   render(true);
+}
+
+function saveState(){
+  const state = {
+    tiles: tiles,
+    nextTileId: nextTileId,
+    score: score,
+    moves: moves,
+    isEventActive: isEventActive,
+    blindMode: blindMode,
+    blindModeMovesLeft: blindModeMovesLeft,
+    lastEventMove: lastEventMove,
+    triggeredHistory: triggeredHistory,
+    triggeredSet: Array.from(triggeredSet),
+    lastMaxValue: lastMaxValue,
+  };
+  localStorage.setItem(STATE_KEY, JSON.stringify(state));
 }
 
 function spawnRandom(){
@@ -180,13 +223,12 @@ function move(dir){
       if (result.length){
         const last = result[result.length-1];
         if (last.value === tile.value && !last.merged){
-          // merge
-            last.value *= 2;
-            last.merged = true;
-            tile.removed = true;
-            score += last.value;
-            if (tile.prevRow!==last.row || tile.prevCol!==last.col) moved = true;
-            return;
+          last.value *= 2;
+          last.merged = true;
+          tile.removed = true;
+          score += last.value;
+          if (tile.prevRow!==last.row || tile.prevCol!==last.col) moved = true;
+          return;
         }
       }
       result.push(tile);
@@ -207,7 +249,6 @@ function move(dir){
     });
   }
 
-  // purge removed tiles
   const before = tiles.length;
   tiles = tiles.filter(t=>!t.removed);
   if (tiles.length !== before) moved = true;
@@ -236,9 +277,9 @@ function move(dir){
   moves++;
   syncGrid();
   render();
-  if (ENABLE_WIN_CHECK) checkWin();
   checkEnd();
   maybeTriggerEvent();
+  saveState();
 }
 
 function canMove(){
@@ -259,15 +300,6 @@ function checkEnd(){
   }
 }
 
-function checkWin(){
-  for(let r=0;r<SIZE;r++) for(let c=0;c<SIZE;c++){
-    if (grid[r][c]===2048){
-      endGame('You Win!', `Reached 2048 in ${moves} moves. Score: ${score}.`);
-      return;
-    }
-  }
-}
-
 function endGame(title,text){
   if (gameOver) return;
   gameOver = true;
@@ -279,6 +311,7 @@ function endGame(title,text){
   overlayTitle.textContent = title;
   overlayText.textContent = `${text} (Best: ${best})`;
   endgameOverlay.style.display = 'flex';
+  localStorage.removeItem(STATE_KEY);
 }
 
 function render(initial=false){
@@ -300,10 +333,9 @@ function render(initial=false){
       el.className = 'tile';
       el.dataset.id = tile.id;
       tilesLayer.appendChild(el);
-      // start at previous position
       el.style.setProperty('--x', prevPos.x+'px');
       el.style.setProperty('--y', prevPos.y+'px');
-      void el.offsetWidth; // force reflow
+      void el.offsetWidth;
     }
 
     el.textContent = blindMode ? '?' : tile.value;
@@ -334,7 +366,6 @@ function render(initial=false){
     existing.delete(tile.id);
   });
 
-  // remove old
   existing.forEach((el)=> el.remove());
 
   scoreEl.textContent = score;
@@ -374,8 +405,6 @@ function maybeTriggerEvent(){
   lastEventMove = moves;
   showEvent(maxTile);
 }
-
-/* Effects */
 
 const chanceGoodEffects = [
   {
@@ -606,8 +635,6 @@ function closeEvent(){
   render();
 }
 
-/* Input */
-
 function keyHandler(e){
   if (gameOver || isEventActive) return;
   switch(e.key){
@@ -657,7 +684,6 @@ function enableInput(){
   window.addEventListener('touchend', touchEndHandler,{passive:true});
 }
 
-/* UI */
 function hideOverlays(){
   endgameOverlay.style.display='none';
   eventOverlay.style.display='none';
@@ -671,7 +697,6 @@ function updateStatus(msg){
   }
 }
 
-/* Helpers */
 function shuffleArray(a){
   for(let i=a.length-1;i>0;i--){
     const j=(Math.random()*(i+1))|0;
@@ -679,8 +704,14 @@ function shuffleArray(a){
   }
 }
 
-document.getElementById('btnRestart').addEventListener('click',()=>init());
-document.getElementById('btnRestart2').addEventListener('click',()=>init());
+document.getElementById('btnRestart').addEventListener('click',()=>{
+  localStorage.removeItem(STATE_KEY);
+  init();
+});
+document.getElementById('btnRestart2').addEventListener('click',()=>{
+  localStorage.removeItem(STATE_KEY);
+  init();
+});
 document.getElementById('btnCloseEvent').addEventListener('click',()=>closeEvent());
 
 createGridUI();
