@@ -76,7 +76,6 @@
     <div class="controls">
       <button id="btnRestart">Restart</button>
       <button id="btnUndo" class="ghost">Undo (1 Move)</button>
-      <button id="btnHint" class="ghost">Hint</button>
     </div>
 
     <div class="msg" id="message">Use arrow keys to move (← ↑ → ↓).</div>
@@ -154,13 +153,11 @@ function spawnRandom(){
 
 // Render the game state to the DOM
 function render(){
-  // Clear tiles (simplified: render text inside cells)
   const cells = document.querySelectorAll('.cell');
   cells.forEach((cell,i)=>{
     const r = Math.floor(i/SIZE), c = i%SIZE;
     const v = grid[r][c];
     cell.textContent = v===0 ? '' : v;
-    // set style class
     cell.className = 'cell' + (v ? ' t-' + v : '');
   });
 
@@ -183,50 +180,40 @@ function copyState(){
 
 // Restore state
 function restoreState(s){
-  grid = s.grid.map(row=>row.slice());
-  score = s.score;
-  playerHP = s.playerHP;
-  enemyHP = s.enemyHP;
-  moves = s.moves;
+  ({ grid, score, playerHP, enemyHP, moves } = s);
   render();
 }
 
 // Check if a move is possible
 function canMove(){
-  // Check for empty cells
-  for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (grid[r][c]===0) return true;
-  // Check for adjacent same-value cells
-  for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++){
-    const v = grid[r][c];
-    if (r+1<SIZE && grid[r+1][c]===v) return true;
-    if (c+1<SIZE && grid[r][c+1]===v) return true;
+  for (let r=0;r<SIZE;r++) {
+    for (let c=0;c<SIZE;c++) {
+      if (grid[r][c] === 0) return true;
+      if (r+1<SIZE && grid[r+1][c]===grid[r][c]) return true;
+      if (c+1<SIZE && grid[r][c+1]===grid[r][c]) return true;
+    }
   }
   return false;
 }
 
 // Move (0:left, 1:up, 2:right, 3:down)
 function move(dir){
-  // Save state for undo
   lastState = copyState();
 
   let moved = false;
-  let damageThisMove = 0; // Accumulate damage for this move
-  // Normalize move logic to "left" by rotating the grid
-  function rotate90(g){ // 90 degrees clockwise
+  let damageThisMove = 0;
+  
+  function rotate90(g){ 
     const n = g.length;
     const ng = Array.from({length:n}, ()=>Array(n).fill(0));
     for (let i=0;i<n;i++) for (let j=0;j<n;j++) ng[j][n-1-i] = g[i][j];
     return ng;
   }
-  let times = 0;
-  if (dir === 0) times = 0; // left
-  if (dir === 1) times = 1; // up -> rotate 90
-  if (dir === 2) times = 2; // right
-  if (dir === 3) times = 3; // down -> rotate 270
+  
+  let times = dir; // 0, 1, 2, 3 maps directly to rotate times
   let g = grid.map(r=>r.slice());
   for (let t=0;t<times;t++) g = rotate90(g);
 
-  // left compress+merge per row
   for (let r=0;r<SIZE;r++){
     let row = g[r].filter(v=>v!==0);
     for (let i=0;i<row.length-1;i++){
@@ -239,14 +226,13 @@ function move(dir){
       }
     }
     while (row.length < SIZE) row.push(0);
-    // check if a move occurred
+    
     for (let c=0;c<SIZE;c++){
       if (g[r][c] !== row[c]) moved = true;
       g[r][c] = row[c];
     }
   }
 
-  // rotate back
   for (let t=0;t<(4-times)%4;t++) g = rotate90(g);
 
   if (!moved) {
@@ -255,19 +241,19 @@ function move(dir){
   }
 
   grid = g.map(r=>r.slice());
-  // Deal damage
+
   if (damageThisMove>0){
     enemyHP -= damageThisMove;
     setMessage('You dealt ' + damageThisMove + ' damage!');
   } else {
     setMessage('Move successful, but no merge occurred (no damage).');
   }
-  // Update high score
+  
   if (score > best){ best = score; localStorage.setItem('rogue2048_best', best); }
-  // Spawn a new tile
+  
   spawnRandom();
   moves++;
-  // Enemy attack cadence
+  
   if (moves % MOVE_TO_HIT === 0){
     enemyAttack();
   }
@@ -277,7 +263,7 @@ function move(dir){
 
 // Enemy attack
 function enemyAttack(){
-  const dmg = Math.max(1, Math.floor( (1 + Math.log1p(moves))/1 )); // simple damage scaling with moves
+  const dmg = Math.max(1, Math.floor( (1 + Math.log1p(moves))/1 ));
   playerHP -= dmg;
   setMessage('The enemy attacks, dealing ' + dmg + ' damage!');
 }
@@ -286,7 +272,7 @@ function enemyAttack(){
 function checkEnd(){
   if (enemyHP <= 0){
     setMessage('You defeated the enemy! Victory! (You can restart)');
-    score += enemyHP<=0 ? 100 : 0;
+    score += 100;
     if (score > best){ best = score; localStorage.setItem('rogue2048_best', best); }
     render();
     return;
@@ -316,9 +302,6 @@ document.getElementById('btnRestart').addEventListener('click', ()=>init());
 document.getElementById('btnUndo').addEventListener('click', ()=>{
   if (lastState){ restoreState(lastState); lastState = null; setMessage('Undid one move.'); }
   else setMessage('No moves to undo.');
-});
-document.getElementById('btnHint').addEventListener('click', ()=>{
-  setMessage('Hint: Focus on merging higher value tiles, and try to keep one side clear for easy movement.');
 });
 
 // Display message
