@@ -11,7 +11,8 @@ const MAX_STATIC_CLASS = 2048;
 const EVENT_FOR_POWERS_ONLY = false;
 
 const CHANCE_GOOD_RATIO = 0.8;
-const CHEAT_HOLD_MS = 10000; 
+const CHEAT_HOLD_MS = 10000;        // Hold Game Over title 10s to continue
+const CHEAT_TITLE_HOLD_MS = 10000;  // Hold main title 10s to set all tiles to 2048
 
 let tiles = [];
 let nextTileId = 1;
@@ -39,6 +40,7 @@ const overlayTitleEvent  = document.getElementById('overlayTitleEvent');
 const overlayTextEvent   = document.getElementById('overlayTextEvent');
 const eventOptionsEl     = document.getElementById('eventOptions');
 const statusBar          = document.getElementById('statusBar');
+const gameTitle          = document.querySelector('header h1');
 
 bestEl.textContent = best;
 
@@ -46,8 +48,13 @@ let tilesLayer;
 let bgCells = [];
 let cellPositions = null;
 
+// Cheat hold tracking (Game Over continue)
 let cheatTimerId = null;
 let cheatActive = false;
+
+// Cheat hold tracking (Title -> all 2048)
+let titleCheatTimerId = null;
+let titleCheatActive = false;
 
 function safeParseInt(v,f=0){ const n=parseInt(v,10); return isNaN(n)?f:n; }
 function debounce(fn, ms) {
@@ -221,7 +228,7 @@ function move(dir){
         if (last.value === tile.value && !last.merged){
           last.value *= 2;
           last.merged = true;
-            tile.removed = true;
+          tile.removed = true;
           score += last.value;
           if (tile.prevRow!==last.row || tile.prevCol!==last.col) moved = true;
           return;
@@ -700,7 +707,7 @@ function shuffleArray(a){
   }
 }
 
-
+/* Cheat 1: Hold Game Over title 10s to continue (rearrange) */
 function startCheatHold(){
   if (!gameOver) return;
   if (cheatTimerId) clearTimeout(cheatTimerId);
@@ -731,23 +738,11 @@ function cheatContinueGame(){
 }
 
 function rearrangeTopTwoRowsSorted(){
- 
   let list = tiles.filter(t=>!t.removed);
-
   list.sort((a,b)=>b.value - a.value);
-
   const keep = list.slice(0, 8);
   const remove = list.slice(8);
   remove.forEach(t=> t.removed = true);
-
-
-  tiles.forEach(t=>{
-    if(!t.removed && (t.row===2 || t.row===3)) {
-  
-    }
-  });
-
-  // 5. 重新给前 8 个（或少于 8 个）分配位置：行 0-1，列 0-3
   keep.forEach((t,i)=>{
     const newRow = Math.floor(i/4);
     const newCol = i%4;
@@ -757,16 +752,43 @@ function rearrangeTopTwoRowsSorted(){
     t.col = newCol;
     t.new = true;
   });
-
   tiles = tiles.filter(t=>!t.removed);
-
   syncGrid();
+}
+
+/* Cheat 2: Hold main title 10s to set all tiles to 2048 */
+function startTitleCheatHold(){
+  if (titleCheatTimerId) clearTimeout(titleCheatTimerId);
+  titleCheatActive = true;
+  titleCheatTimerId = setTimeout(()=>{
+    if (titleCheatActive){
+      tiles.forEach(t=>{ if(!t.removed){ t.value = 2048; t.merged = true; } });
+      syncGrid();
+      render();
+      updateStatus('Cheat activated: all tiles set to 2048.');
+      saveState();
+    }
+  }, CHEAT_TITLE_HOLD_MS);
+  gameTitle.classList.add('holding');
+}
+function cancelTitleCheatHold(){
+  titleCheatActive = false;
+  if (titleCheatTimerId){
+    clearTimeout(titleCheatTimerId);
+    titleCheatTimerId = null;
+  }
+  gameTitle.classList.remove('holding');
 }
 
 overlayTitle.addEventListener('pointerdown', startCheatHold);
 overlayTitle.addEventListener('pointerup', cancelCheatHold);
 overlayTitle.addEventListener('pointerleave', cancelCheatHold);
 overlayTitle.addEventListener('pointercancel', cancelCheatHold);
+
+gameTitle.addEventListener('pointerdown', startTitleCheatHold);
+gameTitle.addEventListener('pointerup', cancelTitleCheatHold);
+gameTitle.addEventListener('pointerleave', cancelTitleCheatHold);
+gameTitle.addEventListener('pointercancel', cancelTitleCheatHold);
 
 document.getElementById('btnRestart').addEventListener('click',()=>{
   localStorage.removeItem(STATE_KEY);
