@@ -3,126 +3,257 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Rogue-2048</title>
+<title>Rogue-2048 — Roguelike Mode</title>
 <style>
-  :root{
-    --bg-start: #e0f7fa;
-    --bg-end: #f5fcfd;
-    --panel: #ffffff;
-    --muted: #607d8b;
-    --board: #b2ebf2;
-    --cell-empty: #e0f2f1;
-    --accent: #00bcd4;
-    --accent-2: #3f51b5;
-    --radius: 12px;
-  }
-  *{box-sizing:border-box}
-  html,body{height:100%;}
-  body{
-    margin:0; font-family: 'Poppins', sans-serif, "Segoe UI", Roboto, Arial;
-    background:linear-gradient(180deg,var(--bg-start),var(--bg-end));
-    display:flex; justify-content:center; align-items:flex-start; padding:30px;
-    -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
-    overscroll-behavior-y: none;
-    font-weight: 500;
-  }
-  .container{width:460px; max-width:95%;}
-  header{display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;}
-  h1{font-size:24px;margin:0;color:#212121; font-weight:700; letter-spacing: -0.5px;}
-  .stats{display:flex; gap:8px; align-items:center;}
-  .card{background:var(--panel); padding:8px 16px; border-radius:12px;
-    box-shadow:0 8px 24px rgba(17,24,39,0.06); font-size:14px; color:#424242; min-width:90px; text-align:center; font-weight:600;}
-  .board{background:var(--board); padding:16px; border-radius:20px; display:flex; justify-content:center;
-          box-shadow:0 12px 40px rgba(17,24,39,0.08);}
-  .grid{display:grid; grid-template-columns:repeat(4,1fr); gap:16px; width:100%; max-width:400px; padding:8px;}
-  .cell{aspect-ratio:1/1; border-radius:12px; display:flex; align-items:center; justify-content:center;
-    font-weight:800; font-size:30px; color:#424242; background:var(--cell-empty); user-select:none;
-    transition: all 0.2s ease;
-    transform: scale(1);
-    box-shadow: inset 0 -3px 0 rgba(0,0,0,0.04), 0 2px 4px rgba(0,0,0,0.02);}
-  .cell.merged{animation:pop 0.1s ease-in-out;}
-  @keyframes pop {
-    0% {transform: scale(1);}
-    50% {transform: scale(1.1);}
-    100% {transform: scale(1);}
-  }
-  .t-2{background:#eee4da; color:#776e65;}
-  .t-4{background:#ede0c8; color:#776e65;}
-  .t-8{background:#f2b179; color:#fff;}
-  .t-16{background:#f59563; color:#fff;}
-  .t-32{background:#f67c5f; color:#fff;}
-  .t-64{background:#f65e3b; color:#fff;}
-  .t-128{background:#edcf72; color:#fff; font-size:24px;}
-  .t-256{background:#edcc61; color:#fff; font-size:24px;}
-  .t-512{background:#edc850; color:#fff; font-size:20px;}
-  .t-1024{background:#edc53f; color:#fff; font-size:18px;}
-  .t-2048{background:#edc22e; color:#fff; font-size:18px;}
-  .t-large{font-size:20px;}
-  .controls{display:flex; gap:10px; margin-top:16px;}
-  button{padding:12px 16px; border-radius:12px; border:0; cursor:pointer; font-weight:700; font-size:15px; transition: transform 0.1s ease, box-shadow 0.1s ease;}
-  button:active{transform: translateY(2px); box-shadow: none;}
-  #btnRestart{background:var(--accent-2); color:white; flex:1; box-shadow:0 4px 12px rgba(63,81,181,0.3);}
-  .overlay{
-    position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,0.4); z-index:50;
-    backdrop-filter: blur(5px);
-  }
-  .panel{background:var(--panel); padding:24px; border-radius:16px; min-width:340px; max-width:92%; box-shadow:0 18px 60px rgba(0,0,0,0.15); text-align:center;}
-  .panel h2{margin:0; font-size:24px; font-weight:700; color:#212121;}
-  .panel p{margin:10px 0 0; color:var(--muted); font-size:15px;}
-  .event-options{display:flex; flex-direction:column; gap:12px; margin-top:20px;}
-  .event-option{background:#f8f9fa; padding:16px; border-radius:12px; border:1px solid #e9ecef; text-align:left; cursor:pointer; transition:transform .1s ease, box-shadow .1s ease; user-select:none;}
-  .event-option:hover{transform:translateY(-3px); box-shadow:0 12px 30px rgba(63,81,181,0.08);}
-  .event-option strong{color:#3f51b5; font-size:16px;}
-  .event-option div{margin-top:4px; font-size:13px; color:#607d8b;}
-  @media (max-width:420px){
-    .grid{gap:12px;}
-    .cell{font-size:26px;}
-  }
+:root {
+  --bg-start: #e0f7fa;
+  --bg-end: #f5fcfd;
+  --panel: #ffffff;
+  --muted: #607d8b;
+  --board: #b2ebf2;
+  --cell-empty: #e0f2f1;
+  --accent: #00bcd4;
+  --accent-2: #3f51b5;
+  --radius: 12px;
+}
+* {
+  box-sizing: border-box;
+}
+html, body {
+  height: 100%;
+  margin: 0;
+  font-family: 'Poppins', sans-serif, "Segoe UI", Roboto, Arial;
+  background: linear-gradient(180deg, var(--bg-start), var(--bg-end));
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 30px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior-y: none;
+  font-weight: 500;
+}
+.container {
+  width: 460px;
+  max-width: 95%;
+}
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+h1 {
+  font-size: 24px;
+  margin: 0;
+  color: #212121;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+.stats {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.card {
+  background: var(--panel);
+  padding: 8px 16px;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(17,24,39,0.06);
+  font-size: 14px;
+  color: #424242;
+  min-width: 90px;
+  text-align: center;
+  font-weight: 600;
+}
+.board {
+  background: var(--board);
+  padding: 16px;
+  border-radius: 20px;
+  display: flex;
+  justify-content: center;
+  box-shadow: 0 12px 40px rgba(17,24,39,0.08);
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  width: 100%;
+  max-width: 400px;
+  padding: 8px;
+}
+.cell {
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 30px;
+  color: #424242;
+  background: var(--cell-empty);
+  user-select: none;
+  transition: all 0.2s ease;
+  transform: scale(1);
+  box-shadow: inset 0 -3px 0 rgba(0,0,0,0.04), 0 2px 4px rgba(0,0,0,0.02);
+}
+.cell.merged {
+  animation: pop 0.1s ease-in-out;
+}
+@keyframes pop {
+  0% {transform: scale(1);}
+  50% {transform: scale(1.1);}
+  100% {transform: scale(1);}
+}
+.t-2 {background: #eee4da; color: #776e65;}
+.t-4 {background: #ede0c8; color: #776e65;}
+.t-8 {background: #f2b179; color: #fff;}
+.t-16 {background: #f59563; color: #fff;}
+.t-32 {background: #f67c5f; color: #fff;}
+.t-64 {background: #f65e3b; color: #fff;}
+.t-128 {background: #edcf72; color: #fff; font-size: 24px;}
+.t-256 {background: #edcc61; color: #fff; font-size: 24px;}
+.t-512 {background: #edc850; color: #fff; font-size: 20px;}
+.t-1024 {background: #edc53f; color: #fff; font-size: 18px;}
+.t-2048 {background: #edc22e; color: #fff; font-size: 18px;}
+.t-large {font-size: 20px;}
+.controls {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+button {
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 0;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 15px;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+button:active {
+  transform: translateY(2px);
+  box-shadow: none;
+}
+#btnRestart {
+  background: var(--accent-2);
+  color: white;
+  flex: 1;
+  box-shadow: 0 4px 12px rgba(63,81,181,0.3);
+}
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.4);
+  z-index: 50;
+  backdrop-filter: blur(5px);
+}
+.panel {
+  background: var(--panel);
+  padding: 24px;
+  border-radius: 16px;
+  min-width: 340px;
+  max-width: 92%;
+  box-shadow: 0 18px 60px rgba(0,0,0,0.15);
+  text-align: center;
+}
+.panel h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: #212121;
+}
+.panel p {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+.event-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 20px;
+}
+.event-option {
+  background: #f8f9fa;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid #e9ecef;
+  text-align: left;
+  cursor: pointer;
+  transition: transform .1s ease, box-shadow .1s ease;
+  user-select: none;
+}
+.event-option:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 30px rgba(63,81,181,0.08);
+}
+.event-option strong {
+  color: #3f51b5;
+  font-size: 16px;
+}
+.event-option div {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #607d8b;
+}
+@media (max-width: 420px) {
+  .grid {
+    gap: 12px;
+  }
+  .cell {
+    font-size: 26px;
+  }
+}
 </style>
 </head>
 <body>
-  <div class="container">
-    <header>
-      <h1>Rogue-2048</h1>
-      <div class="stats">
-        <div class="card">Score<br><strong id="score">0</strong></div>
-        <div class="card">Best<br><strong id="best">0</strong></div>
-      </div>
-    </header>
-    <div class="board" id="board">
-      <div class="grid" id="grid"></div>
-    </div>
-    <div class="controls">
-      <button id="btnRestart">Restart</button>
-    </div>
-  </div>
-  <div class="overlay" id="endgameOverlay">
-    <div class="panel">
-      <h2 id="overlayTitle">Game Over</h2>
-      <p id="overlayText">You scored X points in Y moves.</p>
-      <div style="margin-top:20px;">
-        <button id="overlayRestart" style="background:var(--accent-2);color:#fff;padding:12px 16px;border-radius:12px;border:0;cursor:pointer;font-weight:700;">Restart</button>
-      </div>
-    </div>
-  </div>
-  <div class="overlay" id="eventOverlay">
-    <div class="panel">
-      <h2 id="eventTitle">Event Triggered</h2>
-      <p id="eventMessage">Your highest tile reached <strong id="eventTriggerValue">X</strong>. Choose one:</p>
-      <div class="event-options" id="eventOptions"></div>
-    </div>
-  </div>
+<div class="container">
+  <header>
+    <h1>Rogue-2048</h1>
+    <div class="stats">
+      <div class="card">Score<br><strong id="score">0</strong></div>
+      <div class="card">Best<br><strong id="best">0</strong></div>
+    </div>
+  </header>
+  <div class="board" id="board">
+    <div class="grid" id="grid"></div>
+  </div>
+  <div class="controls">
+    <button id="btnRestart">Restart</button>
+  </div>
+</div>
+
+<div class="overlay" id="endgameOverlay">
+  <div class="panel">
+    <h2 id="overlayTitle">Game Over</h2>
+    <p id="overlayText">You scored X points in Y moves.</p>
+    <div style="margin-top:20px;">
+      <button id="overlayRestart" style="background:var(--accent-2);color:#fff;padding:12px 16px;border-radius:12px;border:0;cursor:pointer;font-weight:700;">Restart</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="eventOverlay">
+  <div class="panel">
+    <h2 id="eventTitle">Event Triggered</h2>
+    <p id="eventMessage">Your highest tile reached <strong id="eventTriggerValue">X</strong>. Choose one:</p>
+    <div class="event-options" id="eventOptions"></div>
+  </div>
+</div>
+
 <script>
 const SIZE = 4;
 let grid = [];
 let score = 0;
 let best = parseInt(localStorage.getItem('rogue2048_best_roguelike') || '0');
 let moves = 0;
-let lastState = null;
 let gameOver = false;
 let isEventActive = false;
 let triggeredMultiples = new Set();
-const IS_TOUCH = ('ontouchstart' in window) || (navigator.maxTouchPoints && navigator.maxTouchPoints > 0);
 const gridEl = document.getElementById('grid');
 const scoreEl = document.getElementById('score');
 const bestEl = document.getElementById('best');
@@ -135,373 +266,482 @@ const eventTriggerValueEl = document.getElementById('eventTriggerValue');
 const eventTitle = document.getElementById('eventTitle');
 
 bestEl.textContent = best;
-
 let blindMode = false;
 
-function createGridUI(){
-  gridEl.innerHTML = '';
-  for (let i=0;i<SIZE*SIZE;i++){
-    const div = document.createElement('div');
-    div.className = 'cell';
-    gridEl.appendChild(div);
-  }
+// Create grid UI cells
+function createGridUI() {
+  gridEl.innerHTML = '';
+  for (let i = 0; i < SIZE * SIZE; i++) {
+    const div = document.createElement('div');
+    div.className = 'cell';
+    gridEl.appendChild(div);
+  }
 }
 
-function render(){
-  const cells = document.querySelectorAll('.cell');
-  let maxV = 0;
-  cells.forEach((cell,i)=>{
-    const r = Math.floor(i/SIZE), c = i%SIZE;
-    const v = grid[r][c];
-    if(blindMode && v !== 0){
-      cell.textContent = '?';
-      cell.className = 'cell t-large';
-    } else {
-      cell.textContent = v === 0 ? '' : v;
-      cell.className = 'cell' + (v ? ' t-' + v : '');
-      if (v >= 1024) cell.classList.add('t-large');
-    }
-    if (v > maxV) maxV = v;
-  });
-  scoreEl.textContent = score;
-  bestEl.textContent = best;
+// Render grid and UI updates
+function render() {
+  const cells = document.querySelectorAll('.cell');
+  let maxV = 0;
+  cells.forEach((cell, i) => {
+    const r = Math.floor(i / SIZE), c = i % SIZE;
+    const v = grid[r][c];
+    if (blindMode && v !== 0) {
+      cell.textContent = '?';
+      cell.className = 'cell t-large';
+    } else {
+      cell.textContent = v === 0 ? '' : v;
+      cell.className = 'cell' + (v ? ' t-' + v : '');
+      if (v >= 1024) cell.classList.add('t-large');
+    }
+    if (v > maxV) maxV = v;
+  });
+  scoreEl.textContent = score;
+  bestEl.textContent = best;
 
-  if (!isEventActive && maxV >= 8 && maxV % 8 === 0 && !triggeredMultiples.has(maxV)){
-    triggeredMultiples.add(maxV);
-    showEvent(maxV);
-  }
+  if (!isEventActive && maxV >= 8 && maxV % 8 === 0 && !triggeredMultiples.has(maxV)) {
+    triggeredMultiples.add(maxV);
+    showEvent(maxV);
+  }
 }
 
-function init(){
-  createGridUI();
-  grid = Array.from({length:SIZE}, ()=>Array(SIZE).fill(0));
-  score = 0; moves = 0; lastState = null; gameOver = false; isEventActive = false;
-  triggeredMultiples = new Set();
-  blindMode = false;
-  spawnRandom(); spawnRandom();
-  render();
-  hideOverlays();
-  enableInput();
+// Initialize game state
+function init() {
+  createGridUI();
+  grid = Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
+  score = 0; moves = 0; gameOver = false; isEventActive = false;
+  triggeredMultiples.clear();
+  blindMode = false;
+  spawnRandom();
+  spawnRandom();
+  render();
+  hideOverlays();
+  enableInput();
 }
 
-function spawnRandom(){
-  const empties = [];
-  for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (grid[r][c] === 0) empties.push([r,c]);
-  if (!empties.length) return false;
-  const [r,c] = empties[Math.floor(Math.random()*empties.length)];
-  grid[r][c] = Math.random() < 0.9 ? 2 : 4;
-  return true;
+// Spawn a random 2 or 4 in an empty cell
+function spawnRandom() {
+  const empties = [];
+  for (let r = 0; r < SIZE; r++) {
+    for (let c = 0; c < SIZE; c++) {
+      if (grid[r][c] === 0) empties.push([r, c]);
+    }
+  }
+  if (!empties.length) return false;
+  const [r, c] = empties[Math.floor(Math.random() * empties.length)];
+  grid[r][c] = Math.random() < 0.9 ? 2 : 4;
+  return true;
 }
 
-function cloneGrid(g){ return g.map(r=>r.slice()); }
-
-function moveLeftProcess(g){
-  let moved = false;
-  let gained = 0;
-  const ng = g.map(row => {
-    const filtered = row.filter(x=>x!==0);
-    const newRow = [];
-    for (let i=0;i<filtered.length;i++){
-      if (i+1 < filtered.length && filtered[i] === filtered[i+1]){
-        const merged = filtered[i]*2;
-        newRow.push(merged);
-        gained += merged;
-        i++;
-      } else {
-        newRow.push(filtered[i]);
-      }
-    }
-    while (newRow.length < SIZE) newRow.push(0);
-    return newRow;
-  });
-  for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (ng[r][c] !== g[r][c]) moved = true;
-  return {newGrid:ng, moved, gained};
+// Clone grid helper
+function cloneGrid(g) {
+  return g.map(row => row.slice());
 }
 
-function transpose(g){
-  const ng = Array.from({length:SIZE}, ()=>Array(SIZE).fill(0));
-  for (let i=0;i<SIZE;i++) for (let j=0;j<SIZE;j++) ng[i][j] = g[j][i];
-  return ng;
+// Process one row move left with merge logic
+function moveLeftProcess(g) {
+  let moved = false;
+  let gained = 0;
+  const ng = g.map(row => {
+    const filtered = row.filter(x => x !== 0);
+    const newRow = [];
+    for (let i = 0; i < filtered.length; i++) {
+      if (i + 1 < filtered.length && filtered[i] === filtered[i + 1]) {
+        const merged = filtered[i] * 2;
+        newRow.push(merged);
+        gained += merged;
+        i++;
+      } else {
+        newRow.push(filtered[i]);
+      }
+    }
+    while (newRow.length < SIZE) newRow.push(0);
+    return newRow;
+  });
+  for (let r = 0; r < SIZE; r++) {
+    for (let c = 0; c < SIZE; c++) {
+      if (ng[r][c] !== g[r][c]) moved = true;
+    }
+  }
+  return { newGrid: ng, moved, gained };
 }
 
-function reverseRows(g){
-  return g.map(row => row.slice().reverse());
+// Transpose matrix helper
+function transpose(g) {
+  const ng = Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
+  for (let i = 0; i < SIZE; i++) for (let j = 0; j < SIZE; j++) ng[i][j] = g[j][i];
+  return ng;
 }
 
-function move(dir){
-  if (gameOver || isEventActive) return;
-  lastState = {
-    grid: cloneGrid(grid),
-    score, moves
-  };
-  let g = cloneGrid(grid);
-  let result;
-  if (dir === 0){
-    result = moveLeftProcess(g);
-    g = result.newGrid;
-  } else if (dir === 3){
-    g = transpose(g);
-    result = moveLeftProcess(g);
-    g = transpose(result.newGrid);
-  } else if (dir === 2){
-    g = reverseRows(g);
-    result = moveLeftProcess(g);
-    g = reverseRows(result.newGrid);
-  } else if (dir === 1){
-    g = transpose(g);
-    g = reverseRows(g);
-    result = moveLeftProcess(g);
-    g = reverseRows(result.newGrid);
-    g = transpose(g);
-  }
-  if (!result || !result.moved){
-    return;
-  }
-  grid = g.map(r=>r.slice());
-  score += result.gained;
-  if (score > best){ best = score; localStorage.setItem('rogue2048_best_roguelike', best); }
-  blindMode = false;
-  spawnRandom();
-  moves++;
-  render();
-  checkEnd();
+// Reverse rows helper
+function reverseRows(g) {
+  return g.map(row => row.slice().reverse());
 }
 
-function canMove(){
-  for (let r=0;r<SIZE;r++){
-    for (let c=0;c<SIZE;c++){
-      if (grid[r][c] === 0) return true;
-      if (r+1 < SIZE && grid[r+1][c] === grid[r][c]) return true;
-      if (c+1 < SIZE && grid[r][c+1] === grid[r][c]) return true;
-    }
-  }
-  return false;
+// Move in directions: 0=left,1=down,2=right,3=up
+function move(dir) {
+  if (gameOver || isEventActive) return;
+  let g = cloneGrid(grid);
+  let result;
+
+  switch (dir) {
+    case 0: // left
+      result = moveLeftProcess(g);
+      g = result.newGrid;
+      break;
+    case 3: // up
+      g = transpose(g);
+      result = moveLeftProcess(g);
+      g = transpose(result.newGrid);
+      break;
+    case 2: // right
+      g = reverseRows(g);
+      result = moveLeftProcess(g);
+      g = reverseRows(result.newGrid);
+      break;
+    case 1: // down
+      g = transpose(g);
+      g = reverseRows(g);
+      result = moveLeftProcess(g);
+      g = reverseRows(result.newGrid);
+      g = transpose(g);
+      break;
+  }
+
+  if (!result || !result.moved) return;
+
+  grid = g.map(r => r.slice());
+  score += result.gained;
+  if (score > best) {
+    best = score;
+    localStorage.setItem('rogue2048_best_roguelike', best);
+  }
+  blindMode = false;
+  spawnRandom();
+  moves++;
+  render();
+  checkEnd();
 }
 
-function checkEnd(){
-  if (!canMove()){
-    endGame('Game Over', `You scored ${score} points in ${moves} moves.`);
-  }
+// Check if any move possible
+function canMove() {
+  for (let r = 0; r < SIZE; r++) {
+    for (let c = 0; c < SIZE; c++) {
+      if (grid[r][c] === 0) return true;
+      if (r + 1 < SIZE && grid[r + 1][c] === grid[r][c]) return true;
+      if (c + 1 < SIZE && grid[r][c + 1] === grid[r][c]) return true;
+    }
+  }
+  return false;
 }
 
-function endGame(title,text){
-  gameOver = true;
-  disableInput();
-  if (score > best){ best = score; localStorage.setItem('rogue2048_best_roguelike', best); }
-  overlayTitle.textContent = title;
-  overlayText.textContent = text + ` (Best: ${best})`;
-  endgameOverlay.style.display = 'flex';
+// Check for game over
+function checkEnd() {
+  if (!canMove()) {
+    endGame('Game Over', `You scored ${score} points in ${moves} moves.`);
+  }
 }
 
-function showEvent(triggerValue){
-  isEventActive = true;
-  disableInput();
-  eventTriggerValueEl.textContent = triggerValue;
-  eventOptionsEl.innerHTML = '';
-  eventTitle.textContent = `Event — ${triggerValue}`;
-
-  const goodOptions = [
-    { title: "Divine Favor", description: `Spawn a ${triggerValue} tile in an empty spot.`, effect: good_addMaxTile },
-    { title: "Power Surge", description: `Double a random tile of 2, 4, or 8.`, effect: good_doubleSpecific },
-  ];
-  const badOptions = [
-    { title: "Dark Omen", description: `Halve the highest tile value.`, effect: bad_halveMaxTile },
-    { title: "Heavy Block", description: `Halve a random tile of 4, 8, or 16.`, effect: bad_halveSpecific },
-  ];
-  const chaosOptions = [
-    { title: "Chaos Shuffle", description: `Shuffle all tiles randomly.`, effect: chaos_shuffle },
-    { title: "Blindness", description: `Hide all tile numbers until you move.`, effect: chaos_blind },
-    { title: "Maximize", description: `Change all tiles to the current maximum value.`, effect: chaos_allMax },
-    { title: "Minimize", description: `Change all tiles to the current minimum value.`, effect: chaos_allMin },
-    { title: "2048 Gift", description: `Spawn a 2048 tile in an empty spot.`, effect: chaos_2048 },
-    { title: "Random Boost", description: `Multiply all tiles by a random factor (0.25, 0.5, 2, or 4).`, effect: chaos_randomMultiply },
-    { title: "Easter Egg", description: `Nothing happens.`, effect: chaos_nothing },
-  ];
-
-  const pickRandom = arr => arr[Math.floor(Math.random()*arr.length)];
-  const options = [
-    pickRandom(goodOptions),
-    pickRandom(badOptions),
-    pickRandom(chaosOptions),
-  ];
-
-  options.forEach((opt) => {
-    const div = document.createElement('div');
-    div.className = 'event-option';
-    div.innerHTML = `<strong>${opt.title}</strong><div>${opt.description}</div>`;
-    div.addEventListener('click', () => {
-      opt.effect();
-      hideOverlays();
-      isEventActive = false;
-      enableInput();
-      render();
-    });
-    eventOptionsEl.appendChild(div);
-  });
-
-  eventOverlay.style.display = 'flex';
+// Show game over overlay
+function endGame(title, text) {
+  gameOver = true;
+  disableInput();
+  if (score > best) {
+    best = score;
+    localStorage.setItem('rogue2048_best_roguelike', best);
+  }
+  overlayTitle.textContent = title;
+  overlayText.textContent = text + ` (Best: ${best})`;
+  endgameOverlay.style.display = 'flex';
 }
 
-function hideOverlays(){
-  endgameOverlay.style.display = 'none';
-  eventOverlay.style.display = 'none';
+// Show event overlay when triggered
+function showEvent(triggerValue) {
+  isEventActive = true;
+  disableInput();
+  eventTriggerValueEl.textContent = triggerValue;
+  eventOptionsEl.innerHTML = '';
+  eventTitle.textContent = `Event — ${triggerValue}`;
+
+  // Good effects (choose one)
+  const goodOptions = [
+    {
+      title: "Divine Favor",
+      description: `Spawn a tile equal to the current highest tile.`,
+      effect: good_addMaxTile
+    },
+    {
+      title: "Power Surge",
+      description: `Double a random tile of 2, 4, or 8.`,
+      effect: good_doubleSpecific
+    },
+  ];
+
+  // Bad effects (choose one)
+  const badOptions = [
+    {
+      title: "Dark Omen",
+      description: `Halve the highest tile value.`,
+      effect: bad_halveMaxTile
+    },
+    {
+      title: "Heavy Block",
+      description: `Halve all tiles of 4, 8, or 16.`,
+      effect: bad_halveSpecific
+    },
+  ];
+
+  // Chaos effects (choose one)
+  const chaosOptions = [
+    {
+      title: "Chaos Shuffle",
+      description: `Shuffle all tiles randomly.`,
+      effect: chaos_shuffle
+    },
+    {
+      title: "Blindness",
+      description: `Hide all tile numbers until next move.`,
+      effect: chaos_blind
+    },
+    {
+      title: "Maximize",
+      description: `Change all tiles to the current maximum value.`,
+      effect: chaos_allMax
+    },
+    {
+      title: "Minimize",
+      description: `Change all tiles to the current minimum value.`,
+      effect: chaos_allMin
+    },
+    {
+      title: "2048 Gift",
+      description: `Spawn a 2048 tile in an empty spot.`,
+      effect: chaos_2048
+    },
+    {
+      title: "Random Wildcard",
+      description: `Spawn a random tile from 2, 4, or 8.`,
+      effect: chaos_randomTile
+    },
+  ];
+
+  // Combine all options with labels for UI grouping
+  const allOptions = [
+    { label: "Good Effects", items: goodOptions },
+    { label: "Bad Effects", items: badOptions },
+    { label: "Chaos Effects", items: chaosOptions },
+  ];
+
+  // Render options in overlay
+  allOptions.forEach(group => {
+    const labelEl = document.createElement('div');
+    labelEl.style.fontWeight = '700';
+    labelEl.style.margin = '12px 0 6px';
+    labelEl.textContent = group.label;
+    eventOptionsEl.appendChild(labelEl);
+
+    group.items.forEach(opt => {
+      const optEl = document.createElement('div');
+      optEl.className = 'event-option';
+      optEl.innerHTML = `<strong>${opt.title}</strong><div>${opt.description}</div>`;
+      optEl.addEventListener('click', () => {
+        opt.effect();
+        closeEvent();
+      });
+      eventOptionsEl.appendChild(optEl);
+    });
+  });
+
+  eventOverlay.style.display = 'flex';
 }
 
-function enableInput(){
-  document.addEventListener('keydown', handleKeyInput);
-  document.addEventListener('touchstart', handleTouchStart, {passive: false});
-  document.addEventListener('touchmove', handleTouchMove, {passive: false});
-  document.addEventListener('touchend', handleTouchEnd);
+// Close event overlay and resume game
+function closeEvent() {
+  isEventActive = false;
+  eventOverlay.style.display = 'none';
+  render();
+  enableInput();
 }
 
-function disableInput(){
-  document.removeEventListener('keydown', handleKeyInput);
-  document.removeEventListener('touchstart', handleTouchStart);
-  document.removeEventListener('touchmove', handleTouchMove);
-  document.removeEventListener('touchend', handleTouchEnd);
+// Disable input during event or game over
+function disableInput() {
+  window.removeEventListener('keydown', keyHandler);
 }
 
-function handleKeyInput(e){
-  if (isEventActive) return;
-  e.preventDefault();
-  if (e.key === 'ArrowLeft') move(0);
-  else if (e.key === 'ArrowRight') move(2);
-  else if (e.key === 'ArrowUp') move(3);
-  else if (e.key === 'ArrowDown') move(1);
+// Enable input for controls
+function enableInput() {
+  window.addEventListener('keydown', keyHandler);
 }
 
-let touchstartX = 0;
-let touchstartY = 0;
-function handleTouchStart(e){
-  if (isEventActive) return;
-  touchstartX = e.touches[0].clientX;
-  touchstartY = e.touches[0].clientY;
-  e.preventDefault();
-}
-function handleTouchMove(e){
-  e.preventDefault();
-}
-function handleTouchEnd(e){
-  if (isEventActive) return;
-  const touchendX = e.changedTouches[0].clientX;
-  const touchendY = e.changedTouches[0].clientY;
-  const dx = touchendX - touchstartX;
-  const dy = touchendY - touchstartY;
-  const absDx = Math.abs(dx);
-  const absDy = Math.abs(dy);
-  if (Math.max(absDx,absDy) > 20){
-    if (absDx > absDy){
-      move(dx>0?2:0);
-    } else {
-      move(dy>0?1:3);
-    }
-  }
+// Event effect implementations
+
+function good_addMaxTile() {
+  const maxVal = getMaxTile();
+  if (!spawnTile(maxVal)) {
+    alert('No empty space to spawn tile.');
+  }
 }
 
-document.getElementById('btnRestart').addEventListener('click', init);
-document.getElementById('overlayRestart').addEventListener('click', init);
-
-// Event Functions
-function getHighestTile(){
-  let max = 0;
-  grid.forEach(row=>row.forEach(v=>max=Math.max(max,v)));
-  return max;
+function good_doubleSpecific() {
+  const targets = [2,4,8];
+  for (let t of targets) {
+    if (doubleRandomTile(t)) return;
+  }
+  alert('No target tile to double.');
 }
 
-function getRandomEmptyCell(){
-  const empties = [];
-  for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (grid[r][c] === 0) empties.push([r,c]);
-  if (!empties.length) return null;
-  return empties[Math.floor(Math.random()*empties.length)];
+function bad_halveMaxTile() {
+  const maxVal = getMaxTile();
+  if (maxVal <= 2) {
+    alert('Highest tile too low to halve.');
+    return;
+  }
+  for (let r=0; r<SIZE; r++) {
+    for (let c=0; c<SIZE; c++) {
+      if (grid[r][c] === maxVal) grid[r][c] = maxVal / 2;
+    }
+  }
+  render();
 }
 
-function getRandomTileByValue(value){
-  const candidates = [];
-  for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (grid[r][c] === value) candidates.push([r,c]);
-  if (!candidates.length) return null;
-  return candidates[Math.floor(Math.random()*candidates.length)];
+function bad_halveSpecific() {
+  const targets = [4,8,16];
+  for (let t of targets) {
+    for (let r=0; r<SIZE; r++) {
+      for (let c=0; c<SIZE; c++) {
+        if (grid[r][c] === t) grid[r][c] = t / 2;
+      }
+    }
+  }
+  render();
 }
 
-function getAllTilesByValue(value){
-  const candidates = [];
-  for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (grid[r][c] === value) candidates.push([r,c]);
-  return candidates;
+function chaos_shuffle() {
+  const tiles = grid.flat();
+  for (let i = tiles.length -1; i>0; i--) {
+    const j = Math.floor(Math.random()*(i+1));
+    [tiles[i], tiles[j]] = [tiles[j], tiles[i]];
+  }
+  for(let i=0; i<tiles.length; i++) {
+    grid[Math.floor(i/SIZE)][i%SIZE] = tiles[i];
+  }
+  render();
 }
 
-function good_addMaxTile(){
-  const max = getHighestTile();
-  const cell = getRandomEmptyCell();
-  if(cell) grid[cell[0]][cell[1]] = max;
+function chaos_blind() {
+  blindMode = true;
+  render();
 }
 
-function good_doubleSpecific(){
-  const valuesToDouble = [2, 4, 8];
-  const val = valuesToDouble[Math.floor(Math.random()*valuesToDouble.length)];
-  const cell = getRandomTileByValue(val);
-  if(cell) grid[cell[0]][cell[1]] *= 2;
+function chaos_allMax() {
+  const maxVal = getMaxTile();
+  for(let r=0; r<SIZE; r++) {
+    for(let c=0; c<SIZE; c++) {
+      if (grid[r][c] !== 0) grid[r][c] = maxVal;
+    }
+  }
+  render();
 }
 
-function bad_halveMaxTile(){
-  const max = getHighestTile();
-  if (max <= 2) return;
-  for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (grid[r][c] === max) grid[r][c] /= 2;
+function chaos_allMin() {
+  const minVal = getMinTile();
+  for(let r=0; r<SIZE; r++) {
+    for(let c=0; c<SIZE; c++) {
+      if (grid[r][c] !== 0) grid[r][c] = minVal;
+    }
+  }
+  render();
 }
 
-function bad_halveSpecific(){
-  const valuesToHalve = [4, 8, 16];
-  const val = valuesToHalve[Math.floor(Math.random()*valuesToHalve.length)];
-  const cells = getAllTilesByValue(val);
-  cells.forEach(cell => grid[cell[0]][cell[1]] /= 2);
+function chaos_2048() {
+  if (!spawnTile(2048)) alert('No empty space to spawn 2048 tile.');
 }
 
-function chaos_shuffle(){
-  const flatGrid = grid.flat().filter(x=>x!==0);
-  for(let i=flatGrid.length-1; i>0; i--){
-    const j = Math.floor(Math.random()*(i+1));
-    [flatGrid[i], flatGrid[j]] = [flatGrid[j], flatGrid[i]];
-  }
-  grid = Array.from({length:SIZE},()=>Array(SIZE).fill(0));
-  for (let i=0;i<flatGrid.length;i++){
-    const r = Math.floor(i/SIZE), c = i%SIZE;
-    grid[r][c] = flatGrid[i];
-  }
+function chaos_randomTile() {
+  const options = [2,4,8];
+  spawnTile(options[Math.floor(Math.random()*options.length)]);
 }
 
-function chaos_blind(){
-  blindMode = true;
+// Helpers for event effects
+
+function spawnTile(value) {
+  const empties = [];
+  for(let r=0; r<SIZE; r++) {
+    for(let c=0; c<SIZE; c++) {
+      if(grid[r][c] === 0) empties.push([r,c]);
+    }
+  }
+  if (empties.length === 0) return false;
+  const [r,c] = empties[Math.floor(Math.random()*empties.length)];
+  grid[r][c] = value;
+  render();
+  return true;
 }
 
-function chaos_allMax(){
-  const max = getHighestTile();
-  for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (grid[r][c] !== 0) grid[r][c] = max;
+function doubleRandomTile(value) {
+  const targets = [];
+  for(let r=0; r<SIZE; r++) {
+    for(let c=0; c<SIZE; c++) {
+      if(grid[r][c] === value) targets.push([r,c]);
+    }
+  }
+  if(targets.length === 0) return false;
+  const [r,c] = targets[Math.floor(Math.random()*targets.length)];
+  grid[r][c] = value * 2;
+  render();
+  return true;
 }
 
-function chaos_allMin(){
-  let min = 2048;
-  let hasTiles = false;
-  for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) {
-    if (grid[r][c] !== 0) {
-      min = Math.min(min, grid[r][c]);
-      hasTiles = true;
-    }
-  }
-  if (!hasTiles) return;
-  for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (grid[r][c] !== 0) grid[r][c] = min;
+function getMaxTile() {
+  let maxVal = 0;
+  for(let r=0; r<SIZE; r++) {
+    for(let c=0; c<SIZE; c++) {
+      if(grid[r][c] > maxVal) maxVal = grid[r][c];
+    }
+  }
+  return maxVal;
 }
 
-function chaos_2048(){
-  const cell = getRandomEmptyCell();
-  if(cell) grid[cell[0]][cell[1]] = 2048;
+function getMinTile() {
+  let minVal = Number.MAX_SAFE_INTEGER;
+  for(let r=0; r<SIZE; r++) {
+    for(let c=0; c<SIZE; c++) {
+      if(grid[r][c] !== 0 && grid[r][c] < minVal) minVal = grid[r][c];
+    }
+  }
+  return minVal === Number.MAX_SAFE_INTEGER ? 0 : minVal;
 }
 
-function chaos_randomMultiply(){
-  const factors = [0.25, 0.5, 2, 4];
-  const factor = factors[Math.floor(Math.random()*factors.length)];
-  for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (grid[r][c] !== 0) grid[r][c] = Math.round(grid[r][c] * factor);
+// Key input handler
+function keyHandler(e) {
+  if (gameOver || isEventActive) return;
+  switch(e.key) {
+    case 'ArrowLeft':
+      move(0);
+      break;
+    case 'ArrowDown':
+      move(1);
+      break;
+    case 'ArrowRight':
+      move(2);
+      break;
+    case 'ArrowUp':
+      move(3);
+      break;
+  }
 }
 
-function chaos_nothing(){}
+// Restart game button
+document.getElementById('btnRestart').addEventListener('click', () => {
+  init();
+  endgameOverlay.style.display = 'none';
+});
 
+document.getElementById('overlayRestart').addEventListener('click', () => {
+  init();
+  endgameOverlay.style.display = 'none';
+});
+
+// Initialize on page load
 init();
 </script>
 </body>
