@@ -1,16 +1,18 @@
-
+/* Rogue-2048 (Endless + Rebalanced Chance/Fate System) */
 
 const SIZE = 4;
 const BEST_KEY = 'rogue2048_best_roguelike';
 
-// Configuration
-const EVENT_PROBABILITY = 1.0; // 1 = always trigger when policy criteria met
-// Modes: 'eachMax', 'powerOfTwo', 'multipleOf8', 'everyIncrement'
-const EVENT_TRIGGER_MODE = 'eachMax';
-const EVENT_COOLDOWN = 2; // min moves between events
-const ENABLE_WIN_CHECK = false;  // Endless mode enabled (was true)
-const MAX_STATIC_CLASS = 2048;   // highest tile with predefined style class
+// Config
+const EVENT_PROBABILITY = 1.0;
+const EVENT_TRIGGER_MODE = 'eachMax'; // 'eachMax','powerOfTwo','multipleOf8','everyIncrement'
+const EVENT_COOLDOWN = 2;
+const ENABLE_WIN_CHECK = false; // Endless
+const MAX_STATIC_CLASS = 2048;
 const EVENT_FOR_POWERS_ONLY = false;
+
+// Chance ratios
+const CHANCE_GOOD_RATIO = 0.8;
 
 // State
 let grid = [];
@@ -22,8 +24,8 @@ let isEventActive = false;
 let blindMode = false;
 let blindModeMovesLeft = 0;
 let lastEventMove = -999;
-let triggeredSet = new Set();      // For once-per-max style
-let triggeredHistory = [];         // For 'everyIncrement'
+let triggeredSet = new Set();
+let triggeredHistory = [];
 let lastMaxValue = 0;
 
 // DOM
@@ -82,6 +84,7 @@ function init(){
   triggeredHistory = [];
   lastMaxValue = 0;
   lastEventMove = -999;
+
   spawnRandom(); spawnRandom();
   hideOverlays();
   render();
@@ -97,7 +100,7 @@ function spawnRandom(){
   return true;
 }
 
-// ---------- Move / Merge Logic ----------
+// ---------- Move / Merge ----------
 function moveLeftProcess(g){
   let moved = false, gained = 0;
   const mergedPos = [];
@@ -133,11 +136,11 @@ function move(dir){
   let g = cloneGrid(grid);
   let result;
   switch(dir){
-    case 0: result = moveLeftProcess(g); g = result.newGrid; break;            // left
-    case 2: g = reverseRows(g); result = moveLeftProcess(g); g = reverseRows(result.newGrid); break; // right
-    case 3: g = transpose(g); result = moveLeftProcess(g); g = transpose(result.newGrid); break;     // up
+    case 0: result = moveLeftProcess(g); g = result.newGrid; break;
+    case 2: g = reverseRows(g); result = moveLeftProcess(g); g = reverseRows(result.newGrid); break;
+    case 3: g = transpose(g); result = moveLeftProcess(g); g = transpose(result.newGrid); break;
     case 1: g = transpose(g); g = reverseRows(g); result = moveLeftProcess(g);
-            g = reverseRows(result.newGrid); g = transpose(g); break;          // down
+            g = reverseRows(result.newGrid); g = transpose(g); break;
   }
   if (!result || !result.moved) return;
 
@@ -152,16 +155,16 @@ function move(dir){
     blindModeMovesLeft--;
     if (blindModeMovesLeft <= 0) {
       blindMode = false;
-      updateStatus('Blind mode ended.');
+      updateStatus('Blind ended.');
     } else {
-      updateStatus(`Blind mode: ${blindModeMovesLeft} moves left.`);
+      updateStatus(`Blind: ${blindModeMovesLeft} moves left.`);
     }
   }
 
   spawnRandom();
   moves++;
   render(result.mergedPositions);
-  if (ENABLE_WIN_CHECK) checkWin(); // skipped in endless
+  if (ENABLE_WIN_CHECK) checkWin();
   checkEnd();
   maybeTriggerEvent();
 }
@@ -186,8 +189,7 @@ function checkEnd(){
 function checkWin(){
   for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++){
     if (grid[r][c] === 2048) {
-      // In endless mode we just show a status note once.
-      updateStatus('2048 reached! Keep going...');
+      endGame('You Win!', `Reached 2048 in ${moves} moves. Score: ${score}.`);
       return;
     }
   }
@@ -228,7 +230,6 @@ function render(mergedPositions = []){
         cell.classList.add(`t-${v}`);
         if (v >= 1024) cell.classList.add('t-large');
       } else {
-        // Fallback color formula for values > 2048
         const hue = (Math.log2(v) * 37) % 360;
         cell.style.background = `hsl(${hue} 65% 50%)`;
         cell.style.color = '#fff';
@@ -237,7 +238,6 @@ function render(mergedPositions = []){
     }
   });
 
-  // Animate merged tiles
   mergedPositions.forEach(mp => {
     const idx = mp.row * SIZE + mp.col;
     const cell = cells[idx];
@@ -255,7 +255,6 @@ function render(mergedPositions = []){
 function eventShouldTrigger(maxTile){
   if (maxTile < 8) return false;
   if (EVENT_FOR_POWERS_ONLY && !isPowerOfTwo(maxTile)) return false;
-
   switch (EVENT_TRIGGER_MODE) {
     case 'eachMax':
     case 'powerOfTwo':
@@ -263,13 +262,11 @@ function eventShouldTrigger(maxTile){
       if (triggeredSet.has(maxTile)) return false;
       triggeredSet.add(maxTile);
       return true;
-
     case 'multipleOf8':
       if (maxTile % 8 !== 0) return false;
       if (triggeredSet.has(maxTile)) return false;
       triggeredSet.add(maxTile);
       return true;
-
     case 'everyIncrement':
       if (maxTile > lastMaxValue) {
         triggeredHistory.push(maxTile);
@@ -277,7 +274,6 @@ function eventShouldTrigger(maxTile){
         return true;
       }
       return false;
-
     default:
       return false;
   }
@@ -287,157 +283,224 @@ function maybeTriggerEvent(){
   if (isEventActive) return;
   if (moves - lastEventMove < EVENT_COOLDOWN) return;
   const maxTile = getMaxTile();
-
   if (!eventShouldTrigger(maxTile)) return;
-  if (Math.random() > EVENT_PROBABILITY) return; // probability gate
-
+  if (Math.random() > EVENT_PROBABILITY) return;
   lastEventMove = moves;
   showEvent(maxTile);
 }
 
-// ---------- Event System (Chance / Fate) ----------
+// ---------- Effects (Chance & Fate) ----------
+const chanceGoodEffects = [
+  {
+    id: 'AddMaxTile',
+    label: 'Add one tile equal to current max',
+    run: () => {
+      const empties = collectEmpties();
+      if (empties.length){
+        const [r,c] = empties[(Math.random()*empties.length)|0];
+        grid[r][c] = getMaxTile();
+      }
+    }
+  },
+  {
+    id: 'DoubleRandomSmallRank',
+    label: 'All tiles of a random small rank (2/4/8) doubled',
+    run: () => {
+      const present = [2,4,8].filter(v => hasValue(v));
+      if (present.length === 0) return;
+      const chosen = present[(Math.random()*present.length)|0];
+      iterateTiles((v,r,c)=>{ if (v===chosen) grid[r][c] = v*2; });
+    }
+  },
+  {
+    id: 'SpawnPair48',
+    label: 'Spawn two tiles (4 or 8)',
+    run: () => {
+      for (let i=0;i<2;i++){
+        const empties = collectEmpties();
+        if (!empties.length) return;
+        const [r,c] = empties[(Math.random()*empties.length)|0];
+        grid[r][c] = Math.random() < 0.5 ? 4 : 8;
+      }
+    }
+  },
+  {
+    id: 'UpgradeLowestThree',
+    label: 'Lowest up to three tiles doubled',
+    run: () => {
+      const tiles = [];
+      for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++){
+        const v = grid[r][c];
+        if (v>0) tiles.push({v,r,c});
+      }
+      tiles.sort((a,b)=>a.v-b.v);
+      const pick = tiles.slice(0,3);
+      pick.forEach(t => { grid[t.r][t.c] = t.v*2; });
+    }
+  }
+];
+
+const chanceHindranceEffects = [
+  {
+    id: 'HalveSingleMax',
+    label: 'One max tile halved',
+    run: () => {
+      const m = getMaxTile();
+      const coords = [];
+      iterateTiles((v,r,c)=>{ if (v===m) coords.push([r,c]); });
+      if (!coords.length) return;
+      const [r,c] = coords[(Math.random()*coords.length)|0];
+      grid[r][c] = Math.max(1, Math.floor(grid[r][c]/2));
+    }
+  }
+];
+
+// Fate weighted effects
+const fateEffects = [
+  {
+    id:'AllBecomeMax', weight:5,
+    label:'All tiles become current max',
+    run: () => {
+      const m = getMaxTile();
+      iterateTiles((v,r,c)=>{ if (v!==0) grid[r][c]=m; });
+    }
+  },
+  {
+    id:'SpawnHighTile', weight:5,
+    label:'Spawn a high tile (max*2)',
+    run: () => {
+      const m = getMaxTile();
+      const val = Math.min(m*2, 8192);
+      const empties = collectEmpties();
+      if (empties.length){
+        const [r,c] = empties[(Math.random()*empties.length)|0];
+        grid[r][c] = val;
+      } else {
+        const all = collectAll();
+        const [r,c] = all[(Math.random()*all.length)|0];
+        grid[r][c] = val;
+      }
+    }
+  },
+  {
+    id:'RandomFactorGlobal', weight:15,
+    label:'Random global factor (×0.5 / ×2 / ×4 / ×8)',
+    run: () => {
+      const roll = Math.random();
+      let factor;
+      if (roll < 0.60) factor = 0.5;
+      else if (roll < 0.85) factor = 2;
+      else if (roll < 0.97) factor = 4;
+      else factor = 8;
+      iterateTiles((v,r,c)=>{ if (v!==0) grid[r][c] = Math.max(1, Math.floor(v*factor)); });
+    }
+  },
+  {
+    id:'ShuffleAll', weight:10,
+    label:'Board shuffled',
+    run: () => shuffleGrid()
+  },
+  {
+    id:'HalveAllAbove32', weight:15,
+    label:'All tiles ≥32 halved',
+    run: () => {
+      iterateTiles((v,r,c)=>{ if (v>=32) grid[r][c]=Math.max(1,Math.floor(v/2)); });
+    }
+  },
+  {
+    id:'BlindFive', weight:10,
+    label:'Blind mode for 5 moves',
+    run: () => { blindMode = true; blindModeMovesLeft = 5; }
+  },
+  {
+    id:'DecayAll', weight:15,
+    label:'All tiles halved',
+    run: () => {
+      iterateTiles((v,r,c)=>{ if (v>0) grid[r][c]=Math.max(1,Math.floor(v/2)); });
+    }
+  },
+  {
+    id:'PurgeRandomRow', weight:5,
+    label:'One random row cleared',
+    run: () => {
+      const row = (Math.random()*SIZE)|0;
+      for (let c=0;c<SIZE;c++) grid[row][c]=0;
+    }
+  },
+  {
+    id:'StripMaxTiles', weight:10,
+    label:'All max tiles reduced (halved)',
+    run: () => {
+      const m = getMaxTile();
+      iterateTiles((v,r,c)=>{ if (v===m) grid[r][c]=Math.max(1,Math.floor(v/2)); });
+    }
+  },
+  {
+    id:'ResetHalfBoard', weight:10,
+    label:'Half of non-zero tiles reset to 2',
+    run: () => {
+      const coords = [];
+      iterateTiles((v,r,c)=>{ if (v>0) coords.push([r,c]); });
+      shuffleArray(coords);
+      const cut = Math.floor(coords.length/2);
+      for (let i=0;i<cut;i++){
+        const [r,c] = coords[i];
+        grid[r][c] = 2;
+      }
+    }
+  }
+];
+
+// ---------- Event System ----------
 function showEvent(triggerValue){
   isEventActive = true;
   disableInput();
   overlayTitleEvent.textContent = 'Event!';
-  overlayTextEvent.textContent = `Max tile ${triggerValue}. Choose: Chance or Fate.`;
+  overlayTextEvent.textContent = `Max tile ${triggerValue}. Choose your path.`;
   eventOptionsEl.innerHTML = '';
 
-  // EFFECT DEFINITIONS (with reveal labels)
-  const effects = {
-    addTileEqualMax: {
-      text: 'Added a tile equal to current max.',
-      run: () => {
-        const empties = collectEmpties();
-        if (empties.length){
-          const [r,c] = empties[(Math.random()*empties.length)|0];
-          grid[r][c] = getMaxTile();
-        }
-      }
-    },
-    doubleSmallRank: {
-      text: 'Doubled all tiles of one small rank.',
-      run: () => {
-        const ranks = [2,4,8];
-        const chosen = ranks[(Math.random()*ranks.length)|0];
-        iterateTiles((v,r,c) => { if (v === chosen) grid[r][c] = v*2; });
-      }
-    },
-    halveMax: {
-      text: 'Halved the maximum tile(s).',
-      run: () => {
-        const m = getMaxTile();
-        iterateTiles((v,r,c)=> { if (v===m) grid[r][c] = Math.max(1, Math.floor(v/2)); });
-      }
-    },
-    halveSet: {
-      text: 'Halved all 4/8/16 tiles.',
-      run: () => {
-        const set = new Set([4,8,16]);
-        iterateTiles((v,r,c) => { if (set.has(v)) grid[r][c] = Math.max(1, Math.floor(v/2)); });
-      }
-    },
-    shuffleAll: {
-      text: 'Shuffled the board.',
-      run: () => shuffleGrid()
-    },
-    blindFive: {
-      text: 'Blind mode for 5 moves.',
-      run: () => {
-        blindMode = true;
-        blindModeMovesLeft = 5;
-      }
-    },
-    allBecomeMax: {
-      text: 'All tiles became the current max.',
-      run: () => {
-        const m = getMaxTile();
-        iterateTiles((v,r,c) => { if (v!==0) grid[r][c] = m; });
-      }
-    },
-    allBecomeMin: {
-      text: 'All tiles became the smallest non-zero.',
-      run: () => {
-        const mn = getMinNonZero();
-        if (mn === 0) return;
-        iterateTiles((v,r,c) => { if (v!==0) grid[r][c] = mn; });
-      }
-    },
-    spawn2048: {
-      text: 'Spawned a 2048 tile.',
-      run: () => {
-        const empties = collectEmpties();
-        if (empties.length){
-          const [r,c] = empties[(Math.random()*empties.length)|0];
-          grid[r][c] = 2048;
-        } else {
-          const all = collectAll();
-            const [r,c] = all[(Math.random()*all.length)|0];
-            grid[r][c] = 2048;
-        }
-      }
-    },
-    randomFactor: {
-      text: 'Applied a random factor ×0.5/×2/×4.',
-      run: () => {
-        const factors = [0.5, 2, 4];
-        const f = factors[(Math.random()*factors.length)|0];
-        iterateTiles((v,r,c) => {
-          if (v!==0) grid[r][c] = Math.max(1, Math.floor(v * f));
-        });
-      }
-    },
-    nothing: {
-      text: 'Nothing happened.',
-      run: () => {}
-    }
-  };
-
-  // Pools:
-  const chancePool = [
-    effects.addTileEqualMax,
-    effects.doubleSmallRank,
-    effects.allBecomeMax,
-    effects.spawn2048
-  ];
-  const fatePool = [
-    effects.halveMax,
-    effects.halveSet,
-    effects.blindFive,
-    effects.randomFactor,
-    effects.shuffleAll,
-    effects.allBecomeMin,
-    effects.nothing
-  ];
-
-  function pickAndApply(pool, label){
+  addEventOption('Chance', 'Mostly helpful (small risk).', 'chance', () => {
+    const isGood = Math.random() < CHANCE_GOOD_RATIO;
+    const pool = isGood ? chanceGoodEffects : chanceHindranceEffects;
     const chosen = pool[(Math.random()*pool.length)|0];
     chosen.run();
     closeEvent();
     render();
-    if (blindMode) {
-      updateStatus(`${label}: ${chosen.text} (Blind mode active)`);
-    } else {
-      updateStatus(`${label}: ${chosen.text}`);
-    }
-  }
+    updateStatus(`Chance -> ${isGood ? 'Good' : 'Hindrance'}: ${chosen.label}`);
+    if (blindMode) updateStatus(`Chance -> ${isGood ? 'Good' : 'Hindrance'}: ${chosen.label} (Blind)`);
+  });
 
-  function addMysteryOption(label, desc, pool){
-    const div = document.createElement('div');
-    div.className = 'event-option';
-    div.innerHTML = `<strong>${label}</strong><div>${desc}</div>`;
-    div.onclick = () => pickAndApply(pool, label);
-    eventOptionsEl.appendChild(div);
-  }
-
-  addMysteryOption('Chance', 'A hopeful unknown boon.', chancePool);
-  addMysteryOption('Fate', 'Embrace destiny—good or harsh.', fatePool);
+  addEventOption('Fate', 'High risk gambling (heavier negatives).', 'fate', () => {
+    const chosen = weightedPick(fateEffects);
+    chosen.run();
+    closeEvent();
+    render();
+    updateStatus(`Fate: ${chosen.label}${blindMode ? ' (Blind)' : ''}`);
+  });
 
   eventOverlay.style.display = 'flex';
   setTimeout(() => {
     const first = eventOptionsEl.querySelector('.event-option');
     if (first) first.focus();
-  }, 30);
+  }, 20);
+}
+
+function addEventOption(title, desc, extraClass, handler){
+  const div = document.createElement('div');
+  div.className = `event-option ${extraClass}`;
+  div.innerHTML = `<strong>${title}</strong><div>${desc}</div>`;
+  div.onclick = handler;
+  eventOptionsEl.appendChild(div);
+}
+
+function weightedPick(list){
+  const total = list.reduce((a,e)=>a+e.weight,0);
+  let roll = Math.random()*total;
+  for (const e of list){
+    if (roll < e.weight) return e;
+    roll -= e.weight;
+  }
+  return list[list.length-1];
 }
 
 function closeEvent(){
@@ -447,6 +510,7 @@ function closeEvent(){
   render();
 }
 
+// ---------- Helpers ----------
 function collectEmpties(){
   const out = [];
   for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (grid[r][c]===0) out.push([r,c]);
@@ -462,13 +526,20 @@ function iterateTiles(fn){
 }
 function shuffleGrid(){
   const flat = grid.flat();
-  for (let i=flat.length-1;i>0;i--){
-    const j = (Math.random()*(i+1))|0;
-    [flat[i],flat[j]] = [flat[j],flat[i]];
-  }
+  shuffleArray(flat);
   for (let i=0;i<flat.length;i++){
     grid[(i/SIZE)|0][i%SIZE] = flat[i];
   }
+}
+function shuffleArray(a){
+  for (let i=a.length-1;i>0;i--){
+    const j = (Math.random()*(i+1))|0;
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+}
+function hasValue(val){
+  for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (grid[r][c]===val) return true;
+  return false;
 }
 
 // ---------- Input ----------
@@ -521,7 +592,7 @@ function enableInput(){
   window.addEventListener('touchend', touchEndHandler, { passive: true });
 }
 
-// ---------- Overlays / UI ----------
+// ---------- UI ----------
 function hideOverlays(){
   endgameOverlay.style.display = 'none';
   eventOverlay.style.display = 'none';
