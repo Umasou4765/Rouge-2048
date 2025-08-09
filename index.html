@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-<title>Rogue-2048</title>
+<title>Rogue-2048 — Roguelike Mode</title>
 <style>
 :root {
   --bg-start: #e0f7fa;
@@ -279,6 +279,18 @@ function createGridUI() {
 function render() {
   const cells = document.querySelectorAll('.cell');
   let maxV = 0;
+  let minV = Infinity;
+  for (let r = 0; r < SIZE; r++) {
+    for (let c = 0; c < SIZE; c++) {
+      const v = grid[r][c];
+      if (v !== 0) {
+        if (v > maxV) maxV = v;
+        if (v < minV) minV = v;
+      }
+    }
+  }
+  if (minV === Infinity) minV = 0;
+
   cells.forEach((cell, i) => {
     const r = Math.floor(i / SIZE), c = i % SIZE;
     const v = grid[r][c];
@@ -290,7 +302,6 @@ function render() {
       cell.className = 'cell' + (v ? ' t-' + v : '');
       if (v >= 1024) cell.classList.add('t-large');
     }
-    if (v > maxV) maxV = v;
   });
   scoreEl.textContent = score;
   bestEl.textContent = best;
@@ -448,86 +459,241 @@ function showEvent(triggerValue) {
   overlayTextEvent.textContent = `Your max tile is ${triggerValue}. Choose your fate:`;
   eventOptionsEl.innerHTML = '';
 
-  const options = [
-    { label: 'Good', desc: 'Gain +score bonus and reset board.', action: () => {
-      score += triggerValue * 10;
-      grid = Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
-      spawnRandom();
-      spawnRandom();
-      blindMode = false;
-      closeEvent();
-    }},
-    { label: 'Bad', desc: 'Lose some points and add a 16 tile.', action: () => {
-      score = Math.max(0, score - triggerValue * 5);
-      let placed = false;
-      for (let r = 0; r < SIZE; r++) {
-        for (let c = 0; c < SIZE; c++) {
-          if (grid[r][c] === 0) {
-            grid[r][c] = 16;
-            placed = true;
-            break;
+  // Helpers for event actions:
+  function getMaxTile() {
+    let maxTile = 0;
+    for (let r = 0; r < SIZE; r++) {
+      for (let c = 0; c < SIZE; c++) {
+        if (grid[r][c] > maxTile) maxTile = grid[r][c];
+      }
+    }
+    return maxTile;
+  }
+  function getMinTile() {
+    let minTile = Infinity;
+    for (let r = 0; r < SIZE; r++) {
+      for (let c = 0; c < SIZE; c++) {
+        const val = grid[r][c];
+        if (val !== 0 && val < minTile) minTile = val;
+      }
+    }
+    return minTile === Infinity ? 0 : minTile;
+  }
+  function getTilesWithValues(arr) {
+    const positions = [];
+    for (let r = 0; r < SIZE; r++) {
+      for (let c = 0; c < SIZE; c++) {
+        if (arr.includes(grid[r][c])) positions.push([r, c]);
+      }
+    }
+    return positions;
+  }
+  function shuffleArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
+    }
+  }
+
+  // Define events categories:
+  const goodEvents = [
+    {
+      text: 'Add one tile equal to current max tile',
+      action: () => {
+        const maxTile = getMaxTile();
+        const empties = getTilesWithValues([0]);
+        if (empties.length) {
+          const [r, c] = empties[Math.floor(Math.random() * empties.length)];
+          grid[r][c] = maxTile;
+          render();
+        }
+      }
+    },
+    {
+      text: 'Double all tiles that are 2, 4, or 8 (random choice)',
+      action: () => {
+        const candidates = [2,4,8];
+        const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+        for (let r=0; r<SIZE; r++) {
+          for (let c=0; c<SIZE; c++) {
+            if (grid[r][c] === chosen) grid[r][c] = grid[r][c]*2;
           }
         }
-        if (placed) break;
+        render();
       }
-      closeEvent();
-    }},
-    { label: 'Chaos', desc: 'Shuffle all tiles randomly.', action: () => {
-      const values = [];
-      for (let r = 0; r < SIZE; r++) {
-        for (let c = 0; c < SIZE; c++) {
-          if (grid[r][c] !== 0) values.push(grid[r][c]);
-        }
-      }
-      for (let r = 0; r < SIZE; r++) {
-        for (let c = 0; c < SIZE; c++) {
-          grid[r][c] = 0;
-        }
-      }
-      for (let val of values) {
-        let placed = false;
-        while (!placed) {
-          const rr = Math.floor(Math.random() * SIZE);
-          const cc = Math.floor(Math.random() * SIZE);
-          if (grid[rr][cc] === 0) {
-            grid[rr][cc] = val;
-            placed = true;
-          }
-        }
-      }
-      closeEvent();
-    }}
+    }
   ];
 
-  options.forEach(({label, desc, action}) => {
-    const div = document.createElement('div');
-    div.className = 'event-option';
-    div.innerHTML = `<strong>${label}</strong><div>${desc}</div>`;
-    div.addEventListener('click', action);
-    eventOptionsEl.appendChild(div);
+  const badEvents = [
+    {
+      text: 'Halve the maximum tile (floor division)',
+      action: () => {
+        const maxTile = getMaxTile();
+        for (let r=0; r<SIZE; r++) {
+          for (let c=0; c<SIZE; c++) {
+            if (grid[r][c] === maxTile) grid[r][c] = Math.floor(grid[r][c] / 2);
+          }
+        }
+        render();
+      }
+    },
+    {
+      text: 'Halve all tiles that are 4, 8, or 16 (floor division)',
+      action: () => {
+        const candidates = [4,8,16];
+        for (let r=0; r<SIZE; r++) {
+          for (let c=0; c<SIZE; c++) {
+            if (candidates.includes(grid[r][c])) {
+              grid[r][c] = Math.floor(grid[r][c]/2);
+            }
+          }
+        }
+        render();
+      }
+    }
+  ];
+
+  const chaosEvents = [
+    {
+      text: 'Shuffle all tiles',
+      action: () => {
+        const flat = [];
+        for (let r=0; r<SIZE; r++) for (let c=0; c<SIZE; c++) flat.push(grid[r][c]);
+        shuffleArray(flat);
+        for (let i=0; i<SIZE*SIZE; i++) grid[Math.floor(i/SIZE)][i%SIZE] = flat[i];
+        render();
+      }
+    },
+    {
+      text: 'Blind mode (hide all tiles with "?")',
+      action: () => {
+        blindMode = true;
+        render();
+      }
+    },
+    {
+      text: 'Set all tiles to the maximum tile',
+      action: () => {
+        const maxTile = getMaxTile();
+        for (let r=0; r<SIZE; r++) for (let c=0; c<SIZE; c++) grid[r][c] = maxTile;
+        render();
+      }
+    },
+    {
+      text: 'Set all tiles to the minimum tile (excluding zero)',
+      action: () => {
+        const minTile = getMinTile();
+        for (let r=0; r<SIZE; r++) for (let c=0; c<SIZE; c++) grid[r][c] = minTile;
+        render();
+      }
+    },
+    {
+      text: 'Get one tile set to 2048',
+      action: () => {
+        const empties = getTilesWithValues([0]);
+        if (empties.length) {
+          const [r, c] = empties[Math.floor(Math.random() * empties.length)];
+          grid[r][c] = 2048;
+        } else {
+          // if no empty, replace a random tile
+          const allPositions = [];
+          for (let r=0; r<SIZE; r++) for (let c=0; c<SIZE; c++) allPositions.push([r,c]);
+          const [r,c] = allPositions[Math.floor(Math.random()*allPositions.length)];
+          grid[r][c] = 2048;
+        }
+        render();
+      }
+    },
+    {
+      text: 'Randomly multiply all tiles by 0.25, 0.5, 2, or 4',
+      action: () => {
+        const factors = [0.25, 0.5, 2, 4];
+        const factor = factors[Math.floor(Math.random() * factors.length)];
+        for (let r=0; r<SIZE; r++) {
+          for (let c=0; c<SIZE; c++) {
+            if(grid[r][c] !== 0){
+              grid[r][c] = Math.max(1, Math.floor(grid[r][c] * factor));
+            }
+          }
+        }
+        render();
+      }
+    },
+    {
+      text: 'Easter egg: nothing happens',
+      action: () => {
+        // no changes
+      }
+    }
+  ];
+
+  // Pick good or bad randomly for auto events
+  // Chaos is only via user choice in event options
+
+  // If max tile is divisible by 8 and not triggered before, show event
+
+  // Create buttons for all three categories
+
+  // Good and Bad pick one random effect each for display text, but allow user to pick too? 
+  // Your idea said chaos is selectable, so show all 7 chaos options.
+
+  // Let's do: Good and Bad random pick one effect each and display text, user confirms by clicking
+  // Chaos will show all options for user to pick one.
+
+  // Build event options:
+
+  // First add good event random pick
+  const goodEvent = goodEvents[Math.floor(Math.random() * goodEvents.length)];
+  const badEvent = badEvents[Math.floor(Math.random() * badEvents.length)];
+
+  // Create Good option button
+  const goodBtn = document.createElement('div');
+  goodBtn.className = 'event-option';
+  goodBtn.innerHTML = `<strong>Good Effect:</strong><br>${goodEvent.text}`;
+  goodBtn.onclick = () => {
+    goodEvent.action();
+    closeEvent();
+  };
+  eventOptionsEl.appendChild(goodBtn);
+
+  // Create Bad option button
+  const badBtn = document.createElement('div');
+  badBtn.className = 'event-option';
+  badBtn.innerHTML = `<strong>Bad Effect:</strong><br>${badEvent.text}`;
+  badBtn.onclick = () => {
+    badEvent.action();
+    closeEvent();
+  };
+  eventOptionsEl.appendChild(badBtn);
+
+  // Create Chaos option buttons for all chaosEvents:
+  chaosEvents.forEach((ev, idx) => {
+    const chaosBtn = document.createElement('div');
+    chaosBtn.className = 'event-option';
+    chaosBtn.innerHTML = `<strong>Chaos Option ${idx+1}:</strong><br>${ev.text}`;
+    chaosBtn.onclick = () => {
+      ev.action();
+      closeEvent();
+    };
+    eventOptionsEl.appendChild(chaosBtn);
   });
 
   eventOverlay.style.display = 'flex';
-  render();
 }
 
 function closeEvent() {
   isEventActive = false;
+  blindMode = false;
   eventOverlay.style.display = 'none';
-  render();
   enableInput();
-}
-
-function hideOverlays() {
-  endgameOverlay.style.display = 'none';
-  eventOverlay.style.display = 'none';
+  render();
 }
 
 function disableInput() {
   window.removeEventListener('keydown', keyHandler);
-  window.removeEventListener('touchstart', touchStartHandler);
-  window.removeEventListener('touchmove', touchMoveHandler);
-  window.removeEventListener('touchend', touchEndHandler);
+  window.removeEventListener('touchstart', touchStartHandler, { passive: true });
+  window.removeEventListener('touchmove', touchMoveHandler, { passive: true });
+  window.removeEventListener('touchend', touchEndHandler, { passive: true });
 }
 
 function enableInput() {
