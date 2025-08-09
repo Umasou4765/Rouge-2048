@@ -1,20 +1,19 @@
-/* Rogue-2048 (Endless + Rebalanced Chance/Fate System) */
+/* Rogue-2048 (Endless + Chance/Fate + Animated Tiles) */
 
 const SIZE = 4;
 const BEST_KEY = 'rogue2048_best_roguelike';
 
-// Config
 const EVENT_PROBABILITY = 1.0;
-const EVENT_TRIGGER_MODE = 'eachMax'; // 'eachMax','powerOfTwo','multipleOf8','everyIncrement'
+const EVENT_TRIGGER_MODE = 'eachMax';
 const EVENT_COOLDOWN = 2;
-const ENABLE_WIN_CHECK = false; // Endless
+const ENABLE_WIN_CHECK = false;
 const MAX_STATIC_CLASS = 2048;
 const EVENT_FOR_POWERS_ONLY = false;
 
-// Chance ratios
 const CHANCE_GOOD_RATIO = 0.8;
 
-// State
+let tiles = [];
+let nextTileId = 1;
 let grid = [];
 let score = 0;
 let best = safeParseInt(localStorage.getItem(BEST_KEY), 0);
@@ -28,7 +27,6 @@ let triggeredSet = new Set();
 let triggeredHistory = [];
 let lastMaxValue = 0;
 
-// DOM
 const gridEl = document.getElementById('grid');
 const scoreEl = document.getElementById('score');
 const bestEl  = document.getElementById('best');
@@ -43,39 +41,47 @@ const statusBar          = document.getElementById('statusBar');
 
 bestEl.textContent = best;
 
-// ---------- Utilities ----------
-function safeParseInt(v, fallback=0){
-  const n = parseInt(v,10);
-  return isNaN(n) ? fallback : n;
-}
-function cloneGrid(g){ return g.map(r => r.slice()); }
-function getMaxTile(){
-  let max = 0;
-  for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (grid[r][c] > max) max = grid[r][c];
-  return max;
-}
-function getMinNonZero(){
-  let min = Infinity;
-  for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++){
-    const v = grid[r][c];
-    if (v!==0 && v < min) min = v;
-  }
-  return min === Infinity ? 0 : min;
-}
-function isPowerOfTwo(n){ return n>0 && (n & (n-1))===0; }
+let tilesLayer;
+let bgCells = [];
+let cellPositions = null;
 
-// ---------- Setup ----------
-function createGridUI() {
+function safeParseInt(v,f=0){ const n=parseInt(v,10); return isNaN(n)?f:n; }
+
+function createGridUI(){
   gridEl.innerHTML = '';
   for (let i=0;i<SIZE*SIZE;i++){
-    const div = document.createElement('div');
-    div.className = 'cell';
-    div.setAttribute('role','gridcell');
-    gridEl.appendChild(div);
+    const bg = document.createElement('div');
+    bg.className = 'bg-cell';
+    gridEl.appendChild(bg);
   }
+  bgCells = Array.from(gridEl.querySelectorAll('.bg-cell'));
+  tilesLayer = document.createElement('div');
+  tilesLayer.className = 'tiles';
+  gridEl.appendChild(tilesLayer);
+  computeCellPositions();
+  window.addEventListener('resize', debounce(()=>{ computeCellPositions(); render(); },120));
 }
+
+function computeCellPositions(){
+  cellPositions = [];
+  const rectParent = gridEl.getBoundingClientRect();
+  bgCells.forEach((cell,i)=>{
+    const r = (i/SIZE)|0;
+    const c = i%SIZE;
+    const rct = cell.getBoundingClientRect();
+    cellPositions[r] = cellPositions[r] || [];
+    cellPositions[r][c] = {
+      x: rct.left - rectParent.left,
+      y: rct.top - rectParent.top,
+      w: rct.width,
+      h: rct.height
+    };
+  });
+}
+
 function init(){
-  grid = Array.from({length: SIZE}, () => Array(SIZE).fill(0));
+  tiles = [];
+  nextTileId = 1;
   score = 0; moves = 0;
   gameOver = false;
   isEventActive = false;
@@ -84,76 +90,141 @@ function init(){
   triggeredHistory = [];
   lastMaxValue = 0;
   lastEventMove = -999;
-
   spawnRandom(); spawnRandom();
+  syncGrid();
   hideOverlays();
-  render();
   enableInput();
   updateStatus('');
+  render(true);
 }
+
 function spawnRandom(){
-  const empties = [];
-  for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (grid[r][c]===0) empties.push([r,c]);
+  const empties = collectEmpties();
   if (!empties.length) return false;
-  const [r,c] = empties[(Math.random() * empties.length) | 0];
-  grid[r][c] = Math.random() < 0.9 ? 2 : 4;
+  const [r,c] = empties[(Math.random()*empties.length)|0];
+  tiles.push({
+    id: nextTileId++,
+    value: Math.random()<0.9?2:4,
+    row: r,
+    col: c,
+    prevRow: r,
+    prevCol: c,
+    new: true,
+    merged: false,
+    removed: false
+  });
   return true;
 }
 
-// ---------- Move / Merge ----------
-function moveLeftProcess(g){
-  let moved = false, gained = 0;
-  const mergedPos = [];
-  const ng = g.map((row,rIdx) => {
-    const filtered = row.filter(v => v!==0);
-    const newRow = [];
-    for (let i=0;i<filtered.length;i++){
-      if (i+1 < filtered.length && filtered[i] === filtered[i+1]) {
-        const merged = filtered[i]*2;
-        newRow.push(merged);
-        gained += merged;
-        mergedPos.push({row: rIdx, col: newRow.length-1});
-        i++;
-      } else {
-        newRow.push(filtered[i]);
-      }
-    }
-    while (newRow.length < SIZE) newRow.push(0);
-    return newRow;
-  });
-  for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (ng[r][c] !== g[r][c]) moved = true;
-  return { newGrid: ng, moved, gained, mergedPositions: mergedPos };
+function syncGrid(){
+  grid = Array.from({length:SIZE},()=>Array(SIZE).fill(0));
+  tiles.forEach(t=>{ if(!t.removed) grid[t.row][t.col] = t.value; });
 }
-function transpose(g){
-  const out = Array.from({length: SIZE}, () => Array(SIZE).fill(0));
-  for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) out[r][c] = g[c][r];
+
+function getMaxTile(){
+  let m=0; tiles.forEach(t=>{ if(!t.removed && t.value>m) m=t.value; }); return m;
+}
+function getMinNonZero(){
+  let mn=Infinity;
+  tiles.forEach(t=>{
+    if(!t.removed && t.value>0 && t.value<mn) mn=t.value;
+  });
+  return mn===Infinity?0:mn;
+}
+function collectEmpties(){
+  const occ = Array.from({length:SIZE},()=>Array(SIZE).fill(false));
+  tiles.forEach(t=>{ if(!t.removed) occ[t.row][t.col]=true; });
+  const out=[];
+  for(let r=0;r<SIZE;r++) for(let c=0;c<SIZE;c++) if(!occ[r][c]) out.push([r,c]);
   return out;
 }
-const reverseRows = g => g.map(r => r.slice().reverse());
+function collectAll(){
+  const out=[];
+  for(let r=0;r<SIZE;r++) for(let c=0;c<SIZE;c++) out.push([r,c]);
+  return out;
+}
+function iterateTiles(fn){
+  tiles.forEach(t=>{ if(!t.removed) fn(t); });
+}
 
 function move(dir){
   if (gameOver || isEventActive) return;
-  let g = cloneGrid(grid);
-  let result;
-  switch(dir){
-    case 0: result = moveLeftProcess(g); g = result.newGrid; break;
-    case 2: g = reverseRows(g); result = moveLeftProcess(g); g = reverseRows(result.newGrid); break;
-    case 3: g = transpose(g); result = moveLeftProcess(g); g = transpose(result.newGrid); break;
-    case 1: g = transpose(g); g = reverseRows(g); result = moveLeftProcess(g);
-            g = reverseRows(result.newGrid); g = transpose(g); break;
-  }
-  if (!result || !result.moved) return;
+  let moved=false;
+  let gained=0;
 
-  grid = g;
-  score += result.gained;
-  if (score > best) {
+  tiles.forEach(t=>{
+    t.prevRow = t.row;
+    t.prevCol = t.col;
+    t.merged = false;
+  });
+
+  const lines = SIZE;
+  if (dir===0 || dir===2){
+    for (let r=0;r<lines;r++){
+      const lineTiles = tiles.filter(t=>!t.removed && t.row===r)
+        .sort((a,b)=> dir===0 ? a.col - b.col : b.col - a.col);
+      processLine(lineTiles, dir, r);
+    }
+  } else {
+    for (let c=0;c<lines;c++){
+      const lineTiles = tiles.filter(t=>!t.removed && t.col===c)
+        .sort((a,b)=> dir===3 ? a.row - b.row : b.row - a.row);
+      processLine(lineTiles, dir, c);
+    }
+  }
+
+  function processLine(lineTiles, dir, index){
+    let result = [];
+    lineTiles.forEach(tile=>{
+      if (tile.removed) return;
+      if (result.length){
+        const last = result[result.length-1];
+        if (last.value === tile.value && !last.merged){
+          // merge
+            last.value *= 2;
+            last.merged = true;
+            tile.removed = true;
+            score += last.value;
+            if (tile.prevRow!==last.row || tile.prevCol!==last.col) moved = true;
+            return;
+        }
+      }
+      result.push(tile);
+    });
+
+    result.forEach((tile,i)=>{
+      let targetRow = tile.row;
+      let targetCol = tile.col;
+      if (dir===0){ targetRow = index; targetCol = i; }
+      if (dir===2){ targetRow = index; targetCol = SIZE-1 - i; }
+      if (dir===3){ targetCol = index; targetRow = i; }
+      if (dir===1){ targetCol = index; targetRow = SIZE-1 - i; }
+      if (tile.row!==targetRow || tile.col!==targetCol){
+        tile.row = targetRow;
+        tile.col = targetCol;
+        moved = true;
+      }
+    });
+  }
+
+  // purge removed tiles
+  const before = tiles.length;
+  tiles = tiles.filter(t=>!t.removed);
+  if (tiles.length !== before) moved = true;
+
+  if (!moved) {
+    tiles.forEach(t=>{ t.new=false; t.merged=false; });
+    return;
+  }
+
+  if (score > best){
     best = score;
     localStorage.setItem(BEST_KEY, best);
   }
 
-  if (blindModeMovesLeft > 0) {
+  if (blindModeMovesLeft > 0){
     blindModeMovesLeft--;
-    if (blindModeMovesLeft <= 0) {
+    if (blindModeMovesLeft <= 0){
       blindMode = false;
       updateStatus('Blind ended.');
     } else {
@@ -163,42 +234,45 @@ function move(dir){
 
   spawnRandom();
   moves++;
-  render(result.mergedPositions);
+  syncGrid();
+  render();
   if (ENABLE_WIN_CHECK) checkWin();
   checkEnd();
   maybeTriggerEvent();
 }
 
-// ---------- End / Win ----------
 function canMove(){
-  for (let r=0;r<SIZE;r++){
-    for (let c=0;c<SIZE;c++){
+  for(let r=0;r<SIZE;r++){
+    for(let c=0;c<SIZE;c++){
       const v = grid[r][c];
       if (v===0) return true;
-      if (r+1 < SIZE && grid[r+1][c] === v) return true;
-      if (c+1 < SIZE && grid[r][c+1] === v) return true;
+      if (r+1<SIZE && grid[r+1][c]===v) return true;
+      if (c+1<SIZE && grid[r][c+1]===v) return true;
     }
   }
   return false;
 }
+
 function checkEnd(){
-  if (!canMove()) {
+  if (!canMove()){
     endGame('Game Over', `You scored ${score} in ${moves} moves.`);
   }
 }
+
 function checkWin(){
-  for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++){
-    if (grid[r][c] === 2048) {
+  for(let r=0;r<SIZE;r++) for(let c=0;c<SIZE;c++){
+    if (grid[r][c]===2048){
       endGame('You Win!', `Reached 2048 in ${moves} moves. Score: ${score}.`);
       return;
     }
   }
 }
+
 function endGame(title,text){
   if (gameOver) return;
   gameOver = true;
   disableInput();
-  if (score > best) {
+  if (score > best){
     best = score;
     localStorage.setItem(BEST_KEY, best);
   }
@@ -207,75 +281,87 @@ function endGame(title,text){
   endgameOverlay.style.display = 'flex';
 }
 
-// ---------- Rendering ----------
-function render(mergedPositions = []){
-  const cells = gridEl.querySelectorAll('.cell');
-  cells.forEach((cell, i) => {
-    const r = (i / SIZE) | 0;
-    const c = i % SIZE;
-    const v = grid[r][c];
-    cell.className = 'cell';
-    cell.style.background = '';
-    cell.style.color = '';
-    if (v === 0){
-      cell.textContent = '';
-      return;
-    }
-    if (blindMode) {
-      cell.textContent = '?';
-      cell.classList.add('t-large');
-    } else {
-      cell.textContent = v;
-      if (v <= MAX_STATIC_CLASS) {
-        cell.classList.add(`t-${v}`);
-        if (v >= 1024) cell.classList.add('t-large');
-      } else {
-        const hue = (Math.log2(v) * 37) % 360;
-        cell.style.background = `hsl(${hue} 65% 50%)`;
-        cell.style.color = '#fff';
-        cell.classList.add('t-large');
-      }
-    }
+function render(initial=false){
+  if (!cellPositions) computeCellPositions();
+  const existing = new Map();
+  tilesLayer.querySelectorAll('.tile').forEach(el=>{
+    existing.set(+el.dataset.id, el);
   });
 
-  mergedPositions.forEach(mp => {
-    const idx = mp.row * SIZE + mp.col;
-    const cell = cells[idx];
-    if (cell){
-      cell.classList.add('merged');
-      setTimeout(() => cell.classList.remove('merged'), 180);
+  tiles.forEach(tile=>{
+    const pos = cellPositions[tile.row][tile.col];
+    const prevPos = cellPositions[tile.prevRow][tile.prevCol];
+    let el = existing.get(tile.id);
+    const wasNew = tile.new;
+    const wasMerged = tile.merged;
+
+    if (!el){
+      el = document.createElement('div');
+      el.className = 'tile';
+      el.dataset.id = tile.id;
+      tilesLayer.appendChild(el);
+      // start at previous position
+      el.style.setProperty('--x', prevPos.x+'px');
+      el.style.setProperty('--y', prevPos.y+'px');
+      void el.offsetWidth; // force reflow
     }
+
+    el.textContent = blindMode ? '?' : tile.value;
+    el.className = 'tile';
+    if (!blindMode){
+      if (tile.value <= MAX_STATIC_CLASS){
+        el.classList.add(`t-${tile.value}`);
+        if (tile.value >= 1024) el.classList.add('t-large');
+      } else {
+        const hue = (Math.log2(tile.value)*37)%360;
+        el.style.background = `hsl(${hue} 65% 50%)`;
+        el.style.color='#fff';
+        el.classList.add('t-large');
+      }
+    } else {
+      el.classList.add('t-large');
+      el.style.background = '#455a64';
+    }
+
+    if (wasNew) el.classList.add('tile-new');
+    if (wasMerged) el.classList.add('tile-merged');
+
+    el.style.setProperty('--x', pos.x+'px');
+    el.style.setProperty('--y', pos.y+'px');
+
+    tile.new = false;
+    tile.merged = false;
+    existing.delete(tile.id);
   });
+
+  // remove old
+  existing.forEach((el)=> el.remove());
 
   scoreEl.textContent = score;
   bestEl.textContent = best;
 }
 
-// ---------- Event Trigger Policy ----------
 function eventShouldTrigger(maxTile){
   if (maxTile < 8) return false;
-  if (EVENT_FOR_POWERS_ONLY && !isPowerOfTwo(maxTile)) return false;
-  switch (EVENT_TRIGGER_MODE) {
+  if (EVENT_FOR_POWERS_ONLY && (maxTile & (maxTile-1))!==0) return false;
+  switch (EVENT_TRIGGER_MODE){
     case 'eachMax':
     case 'powerOfTwo':
-      if (EVENT_TRIGGER_MODE === 'powerOfTwo' && !isPowerOfTwo(maxTile)) return false;
+      if (EVENT_TRIGGER_MODE==='powerOfTwo' && (maxTile & (maxTile-1))!==0) return false;
       if (triggeredSet.has(maxTile)) return false;
-      triggeredSet.add(maxTile);
-      return true;
+      triggeredSet.add(maxTile); return true;
     case 'multipleOf8':
-      if (maxTile % 8 !== 0) return false;
+      if (maxTile%8!==0) return false;
       if (triggeredSet.has(maxTile)) return false;
-      triggeredSet.add(maxTile);
-      return true;
+      triggeredSet.add(maxTile); return true;
     case 'everyIncrement':
-      if (maxTile > lastMaxValue) {
+      if (maxTile>lastMaxValue){
         triggeredHistory.push(maxTile);
         lastMaxValue = maxTile;
         return true;
       }
       return false;
-    default:
-      return false;
+    default: return false;
   }
 }
 
@@ -284,219 +370,229 @@ function maybeTriggerEvent(){
   if (moves - lastEventMove < EVENT_COOLDOWN) return;
   const maxTile = getMaxTile();
   if (!eventShouldTrigger(maxTile)) return;
-  if (Math.random() > EVENT_PROBABILITY) return;
+  if (Math.random()>EVENT_PROBABILITY) return;
   lastEventMove = moves;
   showEvent(maxTile);
 }
 
-// ---------- Effects (Chance & Fate) ----------
+/* Effects */
+
 const chanceGoodEffects = [
   {
-    id: 'AddMaxTile',
-    label: 'Add one tile equal to current max',
-    run: () => {
+    id:'AddMaxTile',
+    label:'Add one tile equal to current max',
+    run:()=>{
       const empties = collectEmpties();
-      if (empties.length){
-        const [r,c] = empties[(Math.random()*empties.length)|0];
-        grid[r][c] = getMaxTile();
-      }
+      if (!empties.length) return;
+      const [r,c] = empties[(Math.random()*empties.length)|0];
+      tiles.push({id:nextTileId++,value:getMaxTile(),row:r,col:c,prevRow:r,prevCol:c,new:true,merged:false,removed:false});
+      syncGrid();
     }
   },
   {
-    id: 'DoubleRandomSmallRank',
-    label: 'All tiles of a random small rank (2/4/8) doubled',
-    run: () => {
-      const present = [2,4,8].filter(v => hasValue(v));
-      if (present.length === 0) return;
-      const chosen = present[(Math.random()*present.length)|0];
-      iterateTiles((v,r,c)=>{ if (v===chosen) grid[r][c] = v*2; });
+    id:'DoubleRandomSmallRank',
+    label:'All tiles of a random small rank (2/4/8) doubled',
+    run:()=>{
+      const ranks = [2,4,8].filter(v=>tiles.some(t=>!t.removed && t.value===v));
+      if (!ranks.length) return;
+      const chosen = ranks[(Math.random()*ranks.length)|0];
+      tiles.forEach(t=>{ if(!t.removed && t.value===chosen){ t.value*=2; t.merged=true; } });
+      syncGrid();
     }
   },
   {
-    id: 'SpawnPair48',
-    label: 'Spawn two tiles (4 or 8)',
-    run: () => {
-      for (let i=0;i<2;i++){
+    id:'SpawnPair48',
+    label:'Spawn two tiles (4 or 8)',
+    run:()=>{
+      for(let i=0;i<2;i++){
         const empties = collectEmpties();
-        if (!empties.length) return;
+        if(!empties.length) break;
         const [r,c] = empties[(Math.random()*empties.length)|0];
-        grid[r][c] = Math.random() < 0.5 ? 4 : 8;
+        tiles.push({id:nextTileId++,value:Math.random()<0.5?4:8,row:r,col:c,prevRow:r,prevCol:c,new:true,merged:false,removed:false});
       }
+      syncGrid();
     }
   },
   {
-    id: 'UpgradeLowestThree',
-    label: 'Lowest up to three tiles doubled',
-    run: () => {
-      const tiles = [];
-      for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++){
-        const v = grid[r][c];
-        if (v>0) tiles.push({v,r,c});
-      }
-      tiles.sort((a,b)=>a.v-b.v);
-      const pick = tiles.slice(0,3);
-      pick.forEach(t => { grid[t.r][t.c] = t.v*2; });
+    id:'UpgradeLowestThree',
+    label:'Lowest up to three tiles doubled',
+    run:()=>{
+      const list = tiles.filter(t=>!t.removed).map(t=>t).sort((a,b)=>a.value-b.value).slice(0,3);
+      list.forEach(t=>{ t.value*=2; t.merged=true; });
+      syncGrid();
     }
   }
 ];
 
 const chanceHindranceEffects = [
   {
-    id: 'HalveSingleMax',
-    label: 'One max tile halved',
-    run: () => {
+    id:'HalveSingleMax',
+    label:'One max tile halved',
+    run:()=>{
       const m = getMaxTile();
-      const coords = [];
-      iterateTiles((v,r,c)=>{ if (v===m) coords.push([r,c]); });
-      if (!coords.length) return;
-      const [r,c] = coords[(Math.random()*coords.length)|0];
-      grid[r][c] = Math.max(1, Math.floor(grid[r][c]/2));
+      const arr = tiles.filter(t=>!t.removed && t.value===m);
+      if (!arr.length) return;
+      const t = arr[(Math.random()*arr.length)|0];
+      t.value = Math.max(1, Math.floor(t.value/2));
+      syncGrid();
     }
   }
 ];
 
-// Fate weighted effects
 const fateEffects = [
   {
     id:'AllBecomeMax', weight:5,
     label:'All tiles become current max',
-    run: () => {
+    run:()=>{
       const m = getMaxTile();
-      iterateTiles((v,r,c)=>{ if (v!==0) grid[r][c]=m; });
+      tiles.forEach(t=>{ if(!t.removed) t.value=m; });
+      syncGrid();
     }
   },
   {
     id:'SpawnHighTile', weight:5,
     label:'Spawn a high tile (max*2)',
-    run: () => {
+    run:()=>{
       const m = getMaxTile();
       const val = Math.min(m*2, 8192);
       const empties = collectEmpties();
       if (empties.length){
         const [r,c] = empties[(Math.random()*empties.length)|0];
-        grid[r][c] = val;
+        tiles.push({id:nextTileId++,value:val,row:r,col:c,prevRow:r,prevCol:c,new:true,merged:false,removed:false});
       } else {
         const all = collectAll();
         const [r,c] = all[(Math.random()*all.length)|0];
-        grid[r][c] = val;
+        tiles.push({id:nextTileId++,value:val,row:r,col:c,prevRow:r,prevCol:c,new:true,merged:false,removed:false});
       }
+      syncGrid();
     }
   },
   {
     id:'RandomFactorGlobal', weight:15,
     label:'Random global factor (×0.5 / ×2 / ×4 / ×8)',
-    run: () => {
-      const roll = Math.random();
-      let factor;
-      if (roll < 0.60) factor = 0.5;
-      else if (roll < 0.85) factor = 2;
-      else if (roll < 0.97) factor = 4;
-      else factor = 8;
-      iterateTiles((v,r,c)=>{ if (v!==0) grid[r][c] = Math.max(1, Math.floor(v*factor)); });
+    run:()=>{
+      const roll=Math.random(); let factor;
+      if (roll<0.60) factor=0.5;
+      else if (roll<0.85) factor=2;
+      else if (roll<0.97) factor=4;
+      else factor=8;
+      tiles.forEach(t=>{ if(!t.removed) t.value=Math.max(1,Math.floor(t.value*factor)); });
+      syncGrid();
     }
   },
   {
     id:'ShuffleAll', weight:10,
     label:'Board shuffled',
-    run: () => shuffleGrid()
+    run:()=>{
+      const positions = collectAll();
+      shuffleArray(positions);
+      tiles.forEach((t,i)=>{
+        const [r,c] = positions[i];
+        t.prevRow=t.row; t.prevCol=t.col;
+        t.row=r; t.col=c;
+      });
+      syncGrid();
+    }
   },
   {
     id:'HalveAllAbove32', weight:15,
     label:'All tiles ≥32 halved',
-    run: () => {
-      iterateTiles((v,r,c)=>{ if (v>=32) grid[r][c]=Math.max(1,Math.floor(v/2)); });
+    run:()=>{
+      tiles.forEach(t=>{ if(!t.removed && t.value>=32) t.value=Math.max(1,Math.floor(t.value/2)); });
+      syncGrid();
     }
   },
   {
     id:'BlindFive', weight:10,
     label:'Blind mode for 5 moves',
-    run: () => { blindMode = true; blindModeMovesLeft = 5; }
+    run:()=>{
+      blindMode=true; blindModeMovesLeft=5;
+    }
   },
   {
     id:'DecayAll', weight:15,
     label:'All tiles halved',
-    run: () => {
-      iterateTiles((v,r,c)=>{ if (v>0) grid[r][c]=Math.max(1,Math.floor(v/2)); });
+    run:()=>{
+      tiles.forEach(t=>{ if(!t.removed) t.value=Math.max(1,Math.floor(t.value/2)); });
+      syncGrid();
     }
   },
   {
     id:'PurgeRandomRow', weight:5,
     label:'One random row cleared',
-    run: () => {
+    run:()=>{
       const row = (Math.random()*SIZE)|0;
-      for (let c=0;c<SIZE;c++) grid[row][c]=0;
+      tiles.forEach(t=>{ if(!t.removed && t.row===row){ t.removed=true; } });
+      tiles = tiles.filter(t=>!t.removed);
+      syncGrid();
     }
   },
   {
     id:'StripMaxTiles', weight:10,
     label:'All max tiles reduced (halved)',
-    run: () => {
+    run:()=>{
       const m = getMaxTile();
-      iterateTiles((v,r,c)=>{ if (v===m) grid[r][c]=Math.max(1,Math.floor(v/2)); });
+      tiles.forEach(t=>{ if(!t.removed && t.value===m) t.value=Math.max(1,Math.floor(t.value/2)); });
+      syncGrid();
     }
   },
   {
     id:'ResetHalfBoard', weight:10,
     label:'Half of non-zero tiles reset to 2',
-    run: () => {
-      const coords = [];
-      iterateTiles((v,r,c)=>{ if (v>0) coords.push([r,c]); });
-      shuffleArray(coords);
-      const cut = Math.floor(coords.length/2);
-      for (let i=0;i<cut;i++){
-        const [r,c] = coords[i];
-        grid[r][c] = 2;
-      }
+    run:()=>{
+      const list = tiles.filter(t=>!t.removed);
+      shuffleArray(list);
+      const cut = Math.floor(list.length/2);
+      for(let i=0;i<cut;i++) list[i].value=2;
+      syncGrid();
     }
   }
 ];
 
-// ---------- Event System ----------
 function showEvent(triggerValue){
   isEventActive = true;
   disableInput();
-  overlayTitleEvent.textContent = 'Event!';
-  overlayTextEvent.textContent = `Max tile ${triggerValue}. Choose your path.`;
-  eventOptionsEl.innerHTML = '';
+  overlayTitleEvent.textContent='Event!';
+  overlayTextEvent.textContent=`Max tile ${triggerValue}. Choose your path.`;
+  eventOptionsEl.innerHTML='';
 
-  addEventOption('Chance', 'Mostly helpful (small risk).', 'chance', () => {
-    const isGood = Math.random() < CHANCE_GOOD_RATIO;
+  addEventOption('Chance','Mostly helpful (small risk).','chance',()=>{
+    const isGood = Math.random()<CHANCE_GOOD_RATIO;
     const pool = isGood ? chanceGoodEffects : chanceHindranceEffects;
     const chosen = pool[(Math.random()*pool.length)|0];
     chosen.run();
     closeEvent();
     render();
-    updateStatus(`Chance -> ${isGood ? 'Good' : 'Hindrance'}: ${chosen.label}`);
-    if (blindMode) updateStatus(`Chance -> ${isGood ? 'Good' : 'Hindrance'}: ${chosen.label} (Blind)`);
+    updateStatus(`Chance -> ${isGood?'Good':'Hindrance'}: ${chosen.label}`);
   });
 
-  addEventOption('Fate', 'High risk gambling (heavier negatives).', 'fate', () => {
+  addEventOption('Fate','High risk gambling (heavier negatives).','fate',()=>{
     const chosen = weightedPick(fateEffects);
     chosen.run();
     closeEvent();
     render();
-    updateStatus(`Fate: ${chosen.label}${blindMode ? ' (Blind)' : ''}`);
+    updateStatus(`Fate: ${chosen.label}${blindMode?' (Blind)':''}`);
   });
 
-  eventOverlay.style.display = 'flex';
-  setTimeout(() => {
-    const first = eventOptionsEl.querySelector('.event-option');
-    if (first) first.focus();
-  }, 20);
+  eventOverlay.style.display='flex';
+  setTimeout(()=>{
+    const first=eventOptionsEl.querySelector('.event-option');
+    if(first) first.focus();
+  },20);
 }
 
-function addEventOption(title, desc, extraClass, handler){
-  const div = document.createElement('div');
-  div.className = `event-option ${extraClass}`;
-  div.innerHTML = `<strong>${title}</strong><div>${desc}</div>`;
-  div.onclick = handler;
+function addEventOption(title,desc,cls,handler){
+  const div=document.createElement('div');
+  div.className=`event-option ${cls}`;
+  div.innerHTML=`<strong>${title}</strong><div>${desc}</div>`;
+  div.onclick=handler;
   eventOptionsEl.appendChild(div);
 }
 
 function weightedPick(list){
   const total = list.reduce((a,e)=>a+e.weight,0);
   let roll = Math.random()*total;
-  for (const e of list){
+  for(const e of list){
     if (roll < e.weight) return e;
     roll -= e.weight;
   }
@@ -504,45 +600,14 @@ function weightedPick(list){
 }
 
 function closeEvent(){
-  isEventActive = false;
-  eventOverlay.style.display = 'none';
+  isEventActive=false;
+  eventOverlay.style.display='none';
   enableInput();
   render();
 }
 
-// ---------- Helpers ----------
-function collectEmpties(){
-  const out = [];
-  for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (grid[r][c]===0) out.push([r,c]);
-  return out;
-}
-function collectAll(){
-  const out = [];
-  for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) out.push([r,c]);
-  return out;
-}
-function iterateTiles(fn){
-  for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) fn(grid[r][c], r, c);
-}
-function shuffleGrid(){
-  const flat = grid.flat();
-  shuffleArray(flat);
-  for (let i=0;i<flat.length;i++){
-    grid[(i/SIZE)|0][i%SIZE] = flat[i];
-  }
-}
-function shuffleArray(a){
-  for (let i=a.length-1;i>0;i--){
-    const j = (Math.random()*(i+1))|0;
-    [a[i],a[j]]=[a[j],a[i]];
-  }
-}
-function hasValue(val){
-  for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (grid[r][c]===val) return true;
-  return false;
-}
+/* Input */
 
-// ---------- Input ----------
 function keyHandler(e){
   if (gameOver || isEventActive) return;
   switch(e.key){
@@ -555,27 +620,27 @@ function keyHandler(e){
 let touchStartX=0,touchStartY=0,touchEndX=0,touchEndY=0;
 function touchStartHandler(e){
   if (gameOver || isEventActive) return;
-  if (e.touches.length === 1){
-    touchStartX = touchEndX = e.touches[0].clientX;
-    touchStartY = touchEndY = e.touches[0].clientY;
+  if (e.touches.length===1){
+    touchStartX=touchEndX=e.touches[0].clientX;
+    touchStartY=touchEndY=e.touches[0].clientY;
   }
 }
 function touchMoveHandler(e){
   if (gameOver || isEventActive) return;
-  if (e.touches.length === 1){
-    touchEndX = e.touches[0].clientX;
-    touchEndY = e.touches[0].clientY;
+  if (e.touches.length===1){
+    touchEndX=e.touches[0].clientX;
+    touchEndY=e.touches[0].clientY;
   }
 }
 function touchEndHandler(){
   if (gameOver || isEventActive) return;
   const dx = touchEndX - touchStartX;
   const dy = touchEndY - touchStartY;
-  if (Math.abs(dx) < 30 && Math.abs(dy) < 30) return;
-  if (Math.abs(dx) > Math.abs(dy)) {
-    dx > 0 ? move(2) : move(0);
+  if (Math.abs(dx)<30 && Math.abs(dy)<30) return;
+  if (Math.abs(dx)>Math.abs(dy)){
+    dx>0?move(2):move(0);
   } else {
-    dy > 0 ? move(1) : move(3);
+    dy>0?move(1):move(3);
   }
 }
 
@@ -587,25 +652,36 @@ function disableInput(){
 }
 function enableInput(){
   window.addEventListener('keydown', keyHandler);
-  window.addEventListener('touchstart', touchStartHandler, { passive: true });
-  window.addEventListener('touchmove', touchMoveHandler, { passive: true });
-  window.addEventListener('touchend', touchEndHandler, { passive: true });
+  window.addEventListener('touchstart', touchStartHandler,{passive:true});
+  window.addEventListener('touchmove', touchMoveHandler,{passive:true});
+  window.addEventListener('touchend', touchEndHandler,{passive:true});
 }
 
-// ---------- UI ----------
+/* UI */
 function hideOverlays(){
-  endgameOverlay.style.display = 'none';
-  eventOverlay.style.display = 'none';
+  endgameOverlay.style.display='none';
+  eventOverlay.style.display='none';
 }
 function updateStatus(msg){
-  if (statusBar) statusBar.textContent = msg;
+  if (statusBar){
+    statusBar.textContent = msg;
+    if (/Fate/.test(msg)) statusBar.style.color='#b71c1c';
+    else if (/Chance/.test(msg)) statusBar.style.color='#0d47a1';
+    else statusBar.style.color='#0d47a1';
+  }
 }
 
-// ---------- Buttons ----------
-document.getElementById('btnRestart').addEventListener('click', () => { init(); });
-document.getElementById('btnRestart2').addEventListener('click', () => { init(); });
-document.getElementById('btnCloseEvent').addEventListener('click', () => { closeEvent(); });
+/* Helpers */
+function shuffleArray(a){
+  for(let i=a.length-1;i>0;i--){
+    const j=(Math.random()*(i+1))|0;
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+}
 
-// ---------- Start ----------
+document.getElementById('btnRestart').addEventListener('click',()=>init());
+document.getElementById('btnRestart2').addEventListener('click',()=>init());
+document.getElementById('btnCloseEvent').addEventListener('click',()=>closeEvent());
+
 createGridUI();
 init();
