@@ -1,17 +1,25 @@
-### Rogue-2048: 
+### Rogue-2048
 
-This project is a unique take on the classic 2048 puzzle game, blending its core mechanics with elements from Roguelike games. Developed as a single HTML file, it's a completely offline experience.
+This is a roguelike twist on the classic 2048 puzzle game.
 
----
+**The Goal:**
+Combine numbered tiles to reach the highest possible score.
 
-### Gameplay
+**How to Play:**
+Use your arrow keys (or swipe on a touchscreen) to move all the tiles on the board. When two tiles with the same number touch, they merge into one, doubling their value.
 
-The game combines the familiar tile-merging puzzle with a simple combat system.
+**The Twist: Roguelike Events**
+Every time you merge tiles to create a new tile that is a multiple of 8 (e.g., 8, 16, 32, etc.), a special "event" is triggered. You'll be given three random choices:
+- A **good** event that helps you.
+- A **bad** event that creates a new challenge.
+- A **chaotic** event with an unpredictable outcome.
 
-* **Core Mechanics**: Use the arrow keys (← ↑ → ↓) to move tiles on the 4x4 grid. When two tiles of the same number merge, they combine into a new tile with a value equal to their sum.
-  
-### Features
+Choose wisely! These events will change your strategy and make every game unique.
 
-* **Offline**: The entire game is contained within a single HTML file, allowing you to play it offline without any internet connection.
-* **Pure Web Technologies**: The project is built using only HTML and vanilla JavaScript, making it an excellent example for web development beginners.
-* **Undo Function**: You can undo your last move, which is a helpful feature for strategizing.
+**Features:**
+- Classic 2048 gameplay with a roguelike element.
+- Random events to keep the game fresh and challenging.
+- "Undo" button to revert your last move.
+- Simple, clean, and responsive design.
+
+***
